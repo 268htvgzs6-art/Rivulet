@@ -108,10 +108,7 @@ final class WatchlistPosterCell: UICollectionViewCell {
 
     func configure(item: PlexWatchlistItem) {
         // `film` for movies, `tv` for shows.
-        let iconName = item.type == .movie ? "film" : "tv"
-        let icon = UIImage(systemName: iconName)?
-            .withConfiguration(UIImage.SymbolConfiguration(pointSize: 32, weight: .light))
-        loadImage(from: item.posterURL, failureIcon: icon)
+        loadImage(from: item.posterURL, failureIcon: TileSymbolIcon.image(item.type == .movie ? "film" : "tv"))
     }
 
     /// MediaItem path. Artwork URLs are already resolved — no serverURL/token needed.
@@ -126,14 +123,18 @@ final class WatchlistPosterCell: UICollectionViewCell {
         currentURL = nil
         clearArtwork()
         placeholderView.isHidden = false
-        placeholderIcon.image = nil
+    }
+
+    /// Sets the placeholder's icon only when it changes, and only where the placeholder can show:
+    /// an image set is not free, and a cache hit hides the placeholder anyway.
+    private func setPlaceholderIcon(_ icon: UIImage?) {
+        if placeholderIcon.image !== icon { placeholderIcon.image = icon }
     }
 
     private func loadImage(from url: URL?, failureIcon: UIImage?) {
         imageLoadTask?.cancel()
-        // Update the placeholder icon regardless of whether we have a URL.
-        placeholderIcon.image = failureIcon
         guard let url else {
+            setPlaceholderIcon(failureIcon)
             clearArtwork()
             currentURL = nil
             // No URL: show placeholder (no fade-out animation needed).
@@ -154,6 +155,7 @@ final class WatchlistPosterCell: UICollectionViewCell {
             placeholderView.isHidden = true
             return
         }
+        setPlaceholderIcon(failureIcon)
         placeholderView.isHidden = false  // visible while loading
         let key = url.absoluteString as AnyHashable
         imageLoadTask = Task { [weak self] in
@@ -190,8 +192,7 @@ final class WatchlistPosterCell: UICollectionViewCell {
         case .person:     name = "person"
         default:          name = "photo"
         }
-        return UIImage(systemName: name)?
-            .withConfiguration(UIImage.SymbolConfiguration(pointSize: 32, weight: .light))
+        return TileSymbolIcon.image(name)
     }
 }
 
