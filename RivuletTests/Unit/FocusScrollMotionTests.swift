@@ -20,23 +20,11 @@ final class FocusScrollMotionTests: XCTestCase {
     }
 
     func test_spring_startsGently_settlesOnTarget_withoutOvershoot() {
-        let r = runSpring(to: 450, response: FocusScrollMotion.verticalResponse)
+        let r = runSpring(to: 450, response: FocusScrollMotion.rowResponse)
         XCTAssertLessThan(r.first, 20, "eases in from rest, no kick")
         XCTAssertEqual(r.end, 450)
         XCTAssertLessThanOrEqual(r.maxY, 450, "critically damped: no overshoot from rest")
         XCTAssertLessThan(r.frames, 45, "settles within ~0.75 s")
-    }
-
-    func test_spring_verticalDamping_landsSoftly_withinAPoint() {
-        let r = runSpring(to: 450, response: FocusScrollMotion.verticalResponse,
-                          damping: FocusScrollMotion.verticalDamping)
-        XCTAssertLessThan(r.first, 20, "eases in from rest, no kick")
-        XCTAssertEqual(r.end, 450)
-        XCTAssertLessThan(r.maxY - 450, 1, "passes a row move's target by under a point")
-        XCTAssertLessThan(r.frames, 32, "settles within ~0.5 s")
-        let screen = runSpring(to: 1080, response: FocusScrollMotion.verticalResponse,
-                               damping: FocusScrollMotion.verticalDamping)
-        XCTAssertLessThan(screen.maxY - 1080, 2, "a full screen passes by under two points")
     }
 
     func test_spring_retargetKeepsSpeed() {

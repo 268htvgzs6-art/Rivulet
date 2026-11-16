@@ -1,16 +1,15 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 // Copyright (C) 2025-2026 Bain Gurley
 
-// Motion of the driven focus scrolls: Home's vertical scroll, the shelf rows, the detail, season
-// and person pages (FocusScrollControlledCollectionView) and the music queue. We drive them because
-// the focus engine's own scroll animator races a CADisplayLink driver. Keep other timings
+// Motion of the driven focus scrolls: the shelf rows (sideways) and the music queue. Vertical
+// focus scrolling is UIKit's own (NativeFocusScrollCoordinator, #631). Keep other timings
 // (carousel morph, backdrop crossfade, detail slide) out of here.
 
 import CoreGraphics
 import Foundation
 
 enum FocusScrollMotion {
-    /// Duration, in seconds, of the eased settle (FocusScrollControlledCollectionView and the music queue).
+    /// Duration, in seconds, of the music queue's eased settle.
     static let settleDuration: CFTimeInterval = 0.35
 
     /// Eased progress for the focus-scroll settle. Cubic ease-out: fast start,
@@ -19,18 +18,10 @@ enum FocusScrollMotion {
         1 - pow(1 - t, 3)
     }
 
-    // MARK: - Spring (Home's vertical scroll and the shelf rows)
+    // MARK: - Spring (the shelf rows)
 
-    /// Spring periods, in seconds: Home's vertical focus-scroll and each shelf row.
-    static let verticalResponse: Double = 0.46
+    /// Spring period, in seconds, of each shelf row's sideways scroll.
     static let rowResponse: Double = 0.36
-    /// Home's vertical damping: just under critical, so a move lands softly instead of creeping in.
-    /// From rest it passes the target by at most 0.15% of the distance (0.7 pt on a 450 pt move).
-    static let verticalDamping: Double = 0.9
-    /// Speed multiplier for a press that retargets further in the direction of travel, so a run of
-    /// presses builds momentum; capped at `maxVerticalSpeed` points per second.
-    static let verticalMomentum: CGFloat = 1.2
-    static let maxVerticalSpeed: CGFloat = 5000
 
     /// One frame of a damped spring, solved exactly. `damping` 1 is critical:
     /// x(t) = (x0 + (v0 + w x0) t) e^(-w t), a smooth start and stop with no overshoot from rest.

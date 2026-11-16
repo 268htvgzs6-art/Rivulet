@@ -529,10 +529,6 @@ final class PlexHomeViewController: UIViewController {
     required init?(coder: NSCoder) { fatalError("init(coder:) not supported") }
 
     deinit {
-        // Diagnostic for the launch double-build: confirms whether the
-        // discarded first instance actually deallocates. Cancellables release
-        // with the instance, and the scroll display link holds only a weak
-        // proxy (see DisplayLinkProxy), so nothing here can pin the VC.
         StartupTimer.mark("PlexHomeVC deinit")
     }
 
@@ -588,16 +584,13 @@ final class PlexHomeViewController: UIViewController {
     private var lastWashOffset: CGFloat = 0
     private var backdropView: HeroBackdropView!
     private var collectionView: UICollectionView!
+    private lazy var nativeScroll = NativeFocusScrollCoordinator(scrollView: collectionView)
     private var dataSource: UICollectionViewDiffableDataSource<HomeSectionID, HomeItemID>!
 
     /// How far the collection reaches below the screen, cancelled by the same bottom content
-    /// inset. A page's rows are then built when it opens (this covers about six Home rows)
-    /// instead of one by one as each scrolls on screen. 0 on Search, whose content swaps
-    /// wholesale under the system search chrome.
-    private var rowOverscan: CGFloat {
-        if case .search = mode { return 0 }
-        return 3600
-    }
+    /// inset. 0 in F+: UIKit's native focus scrolling (#631) builds the next rows in idle time, and a
+    /// collection taller than the screen would make it treat off-screen rows as already visible.
+    private var rowOverscan: CGFloat { 0 }
     /// The collection's on-screen height. Everything that means "the visible area" uses this,
     /// never `collectionView.bounds.height`, which includes `rowOverscan`. 0 before the first layout.
     private var viewportHeight: CGFloat { max(0, collectionView.bounds.height - rowOverscan) }
@@ -734,19 +727,7 @@ final class PlexHomeViewController: UIViewController {
     private var stripIdleWork: DispatchWorkItem?
     private var gridSectionIndex: Int? { sectionsSnapshot.firstIndex(where: { $0.kind == .grid }) }
 
-    // MARK: Fast scroll (held Up/Down)
-    //
-    // After ~1.5s of a held arrow tvOS hands focus to its hidden fast-scroll index bar, which cannot
-    // scroll this self-driven collection. That hand-off is the fast-mode signal: the offset is driven
-    // here while the arrow stays down, and release lands focus on the centre tile.
-
-    /// Up/Down arrow currently held, tracked at the controller so a hold that
-    /// began on a tile is still known once focus sits on the hidden bar.
-    private var heldArrow: UIPress.PressType?
     private var isOnSystemIndexBar = false
-    private var fastScrollLink: CADisplayLink?
-    private var fastScrollStart: CFTimeInterval = 0
-    private var fastScrollLastTick: CFTimeInterval = 0
     /// The single item id of the sort-header section.
     private static let sortHeaderItemID = HomeItemID(sectionID: .sortHeader, itemID: "sort-header")
 
@@ -995,9 +976,6 @@ final class PlexHomeViewController: UIViewController {
             // page 0 loads.
             collectionFocusAnchor.frame = .zero
             view.addSubview(collectionFocusAnchor)
-            // A 416-member collection is 70 rows: keep tvOS's fast-scroll
-            // index bar invisible, as library mode does. It still takes focus
-            // on a held Up/Down, which starts the page's own fast scroll.
             collectionView.showsVerticalScrollIndicator = false
             collectionView.indexDisplayMode = .alwaysHidden
             loadGridPage(containing: 0)
@@ -1551,12 +1529,7 @@ final class PlexHomeViewController: UIViewController {
         guard let minYAfter = firstItemMinY(ofSection: focusedID) else { return }
         let oldY = collectionView.contentOffset.y
         let newY = max(-collectionView.adjustedContentInset.top, oldY + minYAfter - minYBefore)
-        collectionView.contentOffset.y = newY
-        // A focus scroll in flight follows its target; move it too or the
-        // scroll pulls the page back by the shift.
-        if offsetLink != nil {
-            offsetTargetY += newY - oldY
-        }
+        nativeScroll.shiftOffset(to: CGPoint(x: collectionView.contentOffset.x, y: newY))
     }
 
     private func firstItemMinY(ofSection id: HomeSectionID) -> CGFloat? {
@@ -1842,13 +1815,11 @@ final class PlexHomeViewController: UIViewController {
               entry.offset < gridItems.count,
               let attrs = collectionView.layoutAttributesForItem(at: IndexPath(item: entry.offset, section: gridSection))
         else { return }
-        offsetLink?.invalidate()
-        offsetLink = nil
+        nativeScroll.cancel()
         // Centre the row, which is where the focus-scroll puts it anyway, so
         // landing on it afterwards does not move the grid a second time.
         let target = attrs.frame.midY - viewportHeight / 2
-        let maxOffset = max(0, collectionView.contentSize.height - viewportHeight)
-        collectionView.contentOffset = CGPoint(x: 0, y: max(-collectionView.adjustedContentInset.top, min(target, maxOffset)))
+        collectionView.contentOffset = nativeScroll.clamped(CGPoint(x: 0, y: target))
         collectionView.layoutIfNeeded()
         pendingGridFocusItem = entry.offset
     }
@@ -2154,6 +2125,7 @@ final class PlexHomeViewController: UIViewController {
 
     override func viewWillDisappear(_ animated: Bool) {
         super.viewWillDisappear(animated)
+        nativeScroll.settle()
         backdropView.setActive(false)
         cancelDwell()
         // Stop taking Menu presses the moment the page leaves the screen, and
@@ -2914,9 +2886,6 @@ final class PlexHomeViewController: UIViewController {
             collectionView.remembersLastFocusedIndexPath = true
         }
         collectionView.clipsToBounds = false
-        // We drive every vertical move from `didUpdateFocusIn`. Left enabled, the engine's own scroll
-        // animator races the CADisplayLink driver in `animateContentOffset` and stutters.
-        collectionView.isScrollEnabled = false
 
         // Select long-press on a grid tile → tile action menu. Our own
         // recognizer: the system context-menu path never engages on tvOS 26
@@ -2962,9 +2931,6 @@ final class PlexHomeViewController: UIViewController {
         // Hidden until focus is in the grid, so Right from a hub row's last
         // tile cannot land on it and jump a grid the user is not looking at.
         if case .library = mode {
-            // tvOS's fast-scroll index bar stays invisible. It still takes
-            // focus ~1.5s into a held Up/Down (see didUpdateFocusIn); that
-            // hand-off is the signal for our own fast scroll below.
             collectionView.showsVerticalScrollIndicator = false
             collectionView.indexDisplayMode = .alwaysHidden
             alphabetBar.translatesAutoresizingMaskIntoConstraints = false
@@ -3347,9 +3313,6 @@ final class PlexHomeViewController: UIViewController {
                                                 labelsServers: ServerDataStore.shared.labelsServers)
                     } : nil
                 ))
-                cell.overlay.onFocusEntered = { [weak self] in
-                    self?.scrollHeroIntoView()
-                }
                 cell.overlay.autoAdvanceGate = { [weak self] in self?.heroCanAutoAdvance ?? false }
                 if heroCurrentIndex < section.heroMediaItems.count {
                     applyMediaItemHeroState(for: section.heroMediaItems[heroCurrentIndex], on: cell)
@@ -3370,10 +3333,7 @@ final class PlexHomeViewController: UIViewController {
                     self.updateBackdrop(for: item, paging: direction)
                 },
                 onInfo: { [weak self] item in self?.presentDetailPage(for: item) },
-                onPlay: { [weak self] item in self?.playItemDirectly(item) },
-                onFocusEntered: { [weak self] in
-                    self?.scrollHeroIntoView()
-                }
+                onPlay: { [weak self] item in self?.playItemDirectly(item) }
             ))
             cell.overlay.autoAdvanceGate = { [weak self] in self?.heroCanAutoAdvance ?? false }
             return cell
@@ -4392,9 +4352,6 @@ final class PlexHomeViewController: UIViewController {
     override func pressesBegan(_ presses: Set<UIPress>, with event: UIPressesEvent?) {
         for press in presses {
             switch press.type {
-            case .upArrow, .downArrow:
-                heldArrow = press.type
-                if isOnSystemIndexBar { startFastScroll() }
             case .leftArrow, .select:
                 if isOnSystemIndexBar { landFocusOnCenterTile() }
             default:
@@ -4411,7 +4368,6 @@ final class PlexHomeViewController: UIViewController {
     }
 
     override func pressesEnded(_ presses: Set<UIPress>, with event: UIPressesEvent?) {
-        releaseHeldArrow(presses)
         for press in presses where press.type == .playPause && isHandlingPlayPausePress {
             isHandlingPlayPausePress = false
             return
@@ -4421,7 +4377,6 @@ final class PlexHomeViewController: UIViewController {
     }
 
     override func pressesCancelled(_ presses: Set<UIPress>, with event: UIPressesEvent?) {
-        releaseHeldArrow(presses)
         for press in presses where press.type == .playPause && isHandlingPlayPausePress {
             isHandlingPlayPausePress = false
             return
@@ -6857,8 +6812,7 @@ final class PlexHomeViewController: UIViewController {
                 // that follows scrolls it again (row 1 rests under the hero).
                 let rowPath = IndexPath(item: 0, section: indexPath.section)
                 if let restY = restingOffsetY(forSection: indexPath.section) {
-                    offsetLink?.invalidate()
-                    offsetLink = nil
+                    nativeScroll.cancel()
                     collectionView.contentOffset.y = restY
                 } else {
                     collectionView.scrollToItem(at: rowPath, at: .centeredVertically, animated: false)
@@ -6872,11 +6826,10 @@ final class PlexHomeViewController: UIViewController {
                     }
                 }
             } else {
-                // Grids rest where focus will hold the cell (`scrollGridCellIntoView`), so the exit
+                // Grids rest where focus will hold the cell (`gridRestingOffsetY`), so the exit
                 // flight lands on the tile focus ends on. Centring did not, near a short grid's edges.
                 if let restY = gridRestingOffsetY(for: indexPath, from: collectionView.contentOffset.y) {
-                    offsetLink?.invalidate()
-                    offsetLink = nil
+                    nativeScroll.cancel()
                     collectionView.contentOffset.y = restY
                 }
                 collectionView.layoutIfNeeded()
@@ -6988,14 +6941,6 @@ final class PlexHomeViewController: UIViewController {
 
     // MARK: - Scroll-on-focus
 
-    /// Snap the collection view to the top so the hero overlay sits at the
-    /// top of the screen and the Continue Watching peek shows below.
-    private func scrollHeroIntoView() {
-        let targetY = -collectionView.adjustedContentInset.top
-        guard collectionView.contentOffset.y != targetY else { return }
-        animateContentOffset(toY: targetY)
-    }
-
     /// Scroll a row to where it rests while it holds focus.
     private func scrollSectionToRest(sectionIndex: Int) {
         guard let target = restingOffsetY(forSection: sectionIndex),
@@ -7026,18 +6971,7 @@ final class PlexHomeViewController: UIViewController {
             let chrome: CGFloat = if case .search = mode { collectionView.adjustedContentInset.top } else { 0 }
             target = attrs.frame.midY - (viewportHeight + chrome) / 2
         }
-        let maxOffset = max(0, collectionView.contentSize.height - viewportHeight)
-        return max(-collectionView.adjustedContentInset.top, min(target, maxOffset))
-    }
-
-    /// Keep a grid cell's row on screen (library mode), scrolling only as far
-    /// as the system's focus scroll would: the row stays 180 pt inside the
-    /// edges. Measured from the in-flight target so rapid moves add up.
-    private func scrollGridCellIntoView(at indexPath: IndexPath) {
-        let from = offsetLink != nil ? offsetTargetY : collectionView.contentOffset.y
-        guard let clamped = gridRestingOffsetY(for: indexPath, from: from),
-              abs(from - clamped) > 1 else { return }
-        animateContentOffset(toY: clamped)
+        return nativeScroll.clamped(CGPoint(x: 0, y: target)).y
     }
 
     /// The offset that keeps a grid cell's row on screen, starting from `from`.
@@ -7045,9 +6979,7 @@ final class PlexHomeViewController: UIViewController {
         guard let attrs = collectionView.layoutAttributesForItem(at: indexPath) else { return nil }
         let target = FocusScrollMotion.minimalOffset(revealing: attrs.frame, from: from,
                                                      height: viewportHeight)
-        let top = -collectionView.adjustedContentInset.top
-        let maxOffset = max(top, collectionView.contentSize.height - viewportHeight)
-        return max(top, min(target, maxOffset))
+        return nativeScroll.clamped(CGPoint(x: 0, y: target)).y
     }
 
     /// Section of the focused item, nil outside this page. Read from the focused view, because shelf
@@ -7067,11 +6999,9 @@ final class PlexHomeViewController: UIViewController {
         // be on screen at the moment the engine resolves preferred focus.
         if let attrs = collectionView.layoutAttributesForItem(at: IndexPath(item: 0, section: target)) {
             let insetTop = collectionView.adjustedContentInset.top
-            let maxOffset = max(-insetTop, collectionView.contentSize.height - viewportHeight)
-            let clamped = max(-insetTop, min(attrs.frame.minY - insetTop, maxOffset))
+            let clamped = nativeScroll.clamped(CGPoint(x: 0, y: attrs.frame.minY - insetTop)).y
             if abs(collectionView.contentOffset.y - clamped) > 1 {
-                offsetLink?.invalidate()
-                offsetLink = nil
+                nativeScroll.cancel()
                 collectionView.contentOffset.y = clamped
                 collectionView.layoutIfNeeded()
             }
@@ -7086,6 +7016,7 @@ final class PlexHomeViewController: UIViewController {
     /// Scrolls whatever is focused fully on screen. Driven from outside the focus delegate, since the
     /// outer `didUpdateFocusIn` does not reliably run for a tile inside a shelf row's nested collection.
     func revealFocusedRowIfNeeded() {
+        guard nativeScroll.targetOffset == nil else { return }
         guard let focused = UIFocusSystem.focusSystem(for: collectionView)?.focusedItem as? UIView,
               focused.isDescendant(of: collectionView)
         else { return }
@@ -7116,143 +7047,15 @@ final class PlexHomeViewController: UIViewController {
         } else if frameInContent.maxY > offset + viewportHeight {
             target = frameInContent.maxY - viewportHeight
         }
-        let top = -insetTop
-        let maxOffset = max(top, collectionView.contentSize.height - viewportHeight)
-        let clamped = max(top, min(target, maxOffset))
+        let clamped = nativeScroll.clamped(CGPoint(x: 0, y: target)).y
         guard abs(offset - clamped) > 1 else { return }
         animateContentOffset(toY: clamped)
     }
 
-    // MARK: - Per-frame vertical scroll driver
-
-    // `UIView.animate { setContentOffset }` only animates the PRESENTATION layer:
-    // the model contentOffset jumps to the target immediately, so the collection
-    // recycles cells based on the final offset and a row that lands off-screen has
-    // its cells removed at once — it "pops" before finishing its slide-out (worse
-    // here because the collection is clipsToBounds=false, so off-bounds cells are
-    // visible). A CADisplayLink advancing the real offset per frame recycles cells
-    // progressively, so rows scroll out smoothly.
-    private var offsetLink: CADisplayLink?
-    private var offsetTargetY: CGFloat = 0
-    private var offsetVelocity: CGFloat = 0
-    private var offsetLastTick: CFTimeInterval = 0
-    /// The unrounded offset the driver set last. UIScrollView pixel-rounds contentOffset, so stepping
-    /// from the read-back value can stall short of the target once a frame's move is under half a
-    /// pixel, with the link still running every frame.
-    private var offsetModelY: CGFloat = 0
-
-    /// Springs to `targetY` (`FocusScrollMotion.spring`). A scroll already in
-    /// flight is retargeted and keeps its speed, so rapid moves never restart.
     private func animateContentOffset(toY targetY: CGFloat) {
-        // A press further along the way the page is moving adds a little speed, so a run of
-        // presses builds momentum. Only a new target counts: Search can ask twice for one press.
-        // Only below the cap: the spring alone passes it on a long run, and clamping it there would
-        // brake the page on every press.
-        if offsetLink != nil, (targetY - offsetTargetY) * offsetVelocity > 0,
-           abs(offsetVelocity) < FocusScrollMotion.maxVerticalSpeed {
-            let speed = FocusScrollMotion.maxVerticalSpeed
-            offsetVelocity = min(max(offsetVelocity * FocusScrollMotion.verticalMomentum, -speed), speed)
-        }
-        offsetTargetY = targetY
-        guard offsetLink == nil else { return }
-        offsetVelocity = 0
-        offsetLastTick = CACurrentMediaTime()
-        offsetModelY = collectionView.contentOffset.y
-        // Weak proxy target: CADisplayLink retains its target, and a discarded instance with a live link
-        // would leak with its observers still firing. The proxy invalidates once the VC dies.
-        let link = CADisplayLink(target: DisplayLinkProxy(self), selector: #selector(DisplayLinkProxy.tick(_:)))
-        link.add(to: .main, forMode: .common)
-        offsetLink = link
+        nativeScroll.scroll(to: CGPoint(x: 0, y: targetY), animated: true)
     }
 
-    /// Weak trampoline between CADisplayLink (strong target) and the VC.
-    private final class DisplayLinkProxy: NSObject {
-        private weak var owner: PlexHomeViewController?
-        init(_ owner: PlexHomeViewController) { self.owner = owner }
-        @objc func tick(_ link: CADisplayLink) {
-            guard let owner else { link.invalidate(); return }
-            PosterPrefetcher.noteMotion()   // background poster downloads wait while the page scrolls
-            owner.stepOffset(link)
-        }
-        @objc func fastTick(_ link: CADisplayLink) {
-            guard let owner else { link.invalidate(); return }
-            PosterPrefetcher.noteMotion()
-            owner.stepFastScroll(link)
-        }
-    }
-
-    @objc fileprivate func stepOffset(_ link: CADisplayLink) {
-        // The time the frame will be shown, not when this callback happened to run: a late
-        // callback otherwise makes an uneven step (judder) even with no frame dropped.
-        let now = link.targetTimestamp
-        // Continue from the unrounded position while nothing else has moved the page (rounding is
-        // under a pixel); if something did (a snapshot shift, a restore), start from where it is.
-        let shown = collectionView.contentOffset.y
-        let from = abs(shown - offsetModelY) < 1 ? offsetModelY : shown
-        // A soft landing mid-page; critically damped at the top and bottom, so the page never
-        // swings past its ends.
-        let top = -collectionView.adjustedContentInset.top
-        let bottom = max(top, collectionView.contentSize.height - viewportHeight)
-        let atEnd = offsetTargetY <= top + 1 || offsetTargetY >= bottom - 1
-        let step = FocusScrollMotion.spring(from: from, to: offsetTargetY, velocity: offsetVelocity,
-                                            dt: now - offsetLastTick, viewport: viewportHeight,
-                                            response: FocusScrollMotion.verticalResponse,
-                                            damping: atEnd ? 1 : FocusScrollMotion.verticalDamping)
-        offsetLastTick = now
-        offsetVelocity = step.velocity
-        offsetModelY = step.y
-        collectionView.contentOffset = CGPoint(x: 0, y: step.y)
-        if step.done {
-            link.invalidate()
-            offsetLink = nil
-        }
-    }
-
-    private func releaseHeldArrow(_ presses: Set<UIPress>) {
-        guard let heldArrow, presses.contains(where: { $0.type == heldArrow }) else { return }
-        self.heldArrow = nil
-        guard isOnSystemIndexBar else { return }
-        stopFastScroll()
-        landFocusOnCenterTile()
-    }
-
-    private func startFastScroll() {
-        guard fastScrollLink == nil, heldArrow != nil, entryMove?.isMoving != true else { return }
-        offsetLink?.invalidate()
-        offsetLink = nil
-        fastScrollStart = 0   // both stamped on the link's clock at the first step
-        fastScrollLastTick = 0
-        let link = CADisplayLink(target: DisplayLinkProxy(self), selector: #selector(DisplayLinkProxy.fastTick(_:)))
-        link.add(to: .main, forMode: .common)
-        fastScrollLink = link
-    }
-
-    private func stopFastScroll() {
-        fastScrollLink?.invalidate()
-        fastScrollLink = nil
-    }
-
-    /// Ramps from a brisk row-a-time pace to about a screen every tenth of a
-    /// second over ~2.5s of holding; clamps at either end of the content.
-    @objc fileprivate func stepFastScroll(_ link: CADisplayLink) {
-        guard let heldArrow else { stopFastScroll(); return }
-        let now = link.targetTimestamp   // when the frame is shown, as in stepOffset
-        if fastScrollStart == 0 {
-            fastScrollStart = link.timestamp
-            fastScrollLastTick = link.timestamp
-        }
-        let dt = now - fastScrollLastTick
-        fastScrollLastTick = now
-        let velocity = min(9000.0, 1500.0 + 3000.0 * (now - fastScrollStart))
-        let direction: CGFloat = heldArrow == .upArrow ? -1 : 1
-        let insetTop = collectionView.adjustedContentInset.top
-        let maxOffset = max(-insetTop, collectionView.contentSize.height - viewportHeight)
-        let y = max(-insetTop, min(maxOffset, collectionView.contentOffset.y + direction * CGFloat(velocity * dt)))
-        collectionView.contentOffset = CGPoint(x: 0, y: y)
-        if y <= -insetTop || y >= maxOffset { stopFastScroll() }
-    }
-
-    /// Fast mode over: focus the grid tile nearest the screen centre.
     /// The visible grid tile nearest the viewport's centre.
     private func centerGridIndexPath() -> IndexPath? {
         guard let grid = gridSectionIndex else { return nil }
@@ -7268,7 +7071,7 @@ final class PlexHomeViewController: UIViewController {
     }
 
     private func landFocusOnCenterTile() {
-        stopFastScroll()
+        nativeScroll.cancel()
         // Move mode: the index bar hands focus back to the held tile, never the centre one.
         if let entryMove, entryMove.isMoving {
             isOnSystemIndexBar = false
@@ -8166,7 +7969,31 @@ extension PlexHomeViewController: UICollectionViewDelegate {
         }
     }
 
+    func scrollViewWillEndDragging(_ scrollView: UIScrollView, withVelocity velocity: CGPoint,
+                                   targetContentOffset: UnsafeMutablePointer<CGPoint>) {
+        guard scrollView === collectionView else { return }
+        let focused = UIFocusSystem.focusSystem(for: collectionView)?.focusedItem as? UIView
+        targetContentOffset.pointee = nativeScroll.targetContentOffset(
+            proposed: targetContentOffset.pointee, preferred: focused.flatMap(focusScrollOffset))
+    }
+
+    func scrollViewDidEndDragging(_ scrollView: UIScrollView, willDecelerate decelerate: Bool) {
+        guard scrollView === collectionView else { return }
+        nativeScroll.didEndDragging(willDecelerate: decelerate)
+    }
+
+    func scrollViewDidEndDecelerating(_ scrollView: UIScrollView) {
+        guard scrollView === collectionView else { return }
+        nativeScroll.didEndScrolling()
+    }
+
+    func scrollViewDidEndScrollingAnimation(_ scrollView: UIScrollView) {
+        guard scrollView === collectionView else { return }
+        nativeScroll.didEndScrolling()
+    }
+
     func scrollViewDidScroll(_ scrollView: UIScrollView) {
+        guard scrollView === collectionView else { return }
         let offset = scrollView.contentOffset.y
         let shelfTop = Self.heroBackdropFloor
         backdropView.applyScrollOffset(offset, shelfTop: shelfTop)
@@ -8179,6 +8006,7 @@ extension PlexHomeViewController: UICollectionViewDelegate {
         if abs(offset - lastWashOffset) > 0.5 {
             lastWashOffset = offset
             lastPageMotion = CACurrentMediaTime()
+            PosterPrefetcher.noteMotion()   // background poster downloads wait while the page scrolls
             if dwellRevealed {
                 concealDwell()
                 dwellArmedAt = lastPageMotion
@@ -8216,22 +8044,21 @@ extension PlexHomeViewController: UICollectionViewDelegate {
                 // find nothing to enter and fall through to the sidebar. Off
                 // while on the strip, back on once the grid has focus again.
                 collectionView.remembersLastFocusedIndexPath = false
+                nativeScroll.cancel()
                 scheduleStripIdleReturn()
                 return
             }
             // tvOS's fast-scroll index bar: the one focusable thing inside
-            // the collection that is not in a cell. Fast mode begins.
+            // the collection that is not in a cell.
             if let next = context.nextFocusedView, next.isDescendant(of: collectionView),
                !sequence(first: next, next: { $0.superview }).contains(where: { $0 is UICollectionViewCell }) {
                 isOnSystemIndexBar = true
-                offsetLink?.invalidate()
-                offsetLink = nil
+                nativeScroll.clearFocusRequest()
                 setAlphabetBarVisible(false)
-                if heldArrow != nil { startFastScroll() }
                 return
             }
             isOnSystemIndexBar = false
-            stopFastScroll()
+            nativeScroll.focusChanged(to: context.nextFocusedView, target: nil)
             stripIdleWork?.cancel()
             setAlphabetBarVisible(false)
             updateLeftEdgeGuide(for: nil)
@@ -8239,7 +8066,7 @@ extension PlexHomeViewController: UICollectionViewDelegate {
             // page's position again on return, even if it has not changed.
             focusBelowTop = nil
             // Focus may still be inside the page if the section lookup failed (a tile in a shelf row's
-            // nested collection). Nothing else scrolls for us, so reveal it from its own frame.
+            // nested collection). Supply a frame-based reveal if UIKit left it clipped.
             if let next = context.nextFocusedView, next.isDescendant(of: collectionView) {
                 revealFocusedView(next)
             }
@@ -8247,7 +8074,6 @@ extension PlexHomeViewController: UICollectionViewDelegate {
         }
         postFocusBelowTop(nextSectionIndex > topSectionIndex)
         isOnSystemIndexBar = false
-        stopFastScroll()
         // Kept AFTER focus leaves the page, so a press hand-off can still say
         // which row it came from. `focusedSectionForHandoff` is nil by then.
         lastFocusedSection = nextSectionIndex
@@ -8272,42 +8098,19 @@ extension PlexHomeViewController: UICollectionViewDelegate {
             }
         }
         setAlphabetBarVisible(kind == .grid)
-        switch kind {
-        case .hero:
-            scrollHeroIntoView()
-        case .grid:
-            // Focus is in the grid, so any letter jump has been consumed.
+        if kind == .grid {
             pendingGridFocusItem = nil
             stripIdleWork?.cancel()
             collectionView.remembersLastFocusedIndexPath = true
             if let slot = context.nextFocusedIndexPath?.item {
                 alphabetBar.entryIndex = alphabetIndex?.entryIndex(containing: slot)
             }
-            // Multi-row grid: centring the SECTION (its first item) would
-            // pin the viewport to the grid's top — centre the focused
-            // cell's own row instead. Grid cells are NOT orthogonal, so
-            // `nextFocusedIndexPath` resolves at the collection level.
             if let indexPath = context.nextFocusedIndexPath {
-                scrollGridCellIntoView(at: indexPath)
                 beginGridDwell(at: indexPath, view: context.nextFocusedView)
             }
-        case .watchlistGrid:
-            // Same multi-row reason as the library grid, none of its A–Z or
-            // letter-jump bookkeeping. Falling through to `default` centred the
-            // section's FIRST item, which pinned the page on row 1.
-            // No hold here: a watchlist entry carries only a poster, no wide picture.
-            if let indexPath = context.nextFocusedIndexPath {
-                scrollGridCellIntoView(at: indexPath)
-            }
-        default:
-            // The first row under the hero collapses the hero to a FIXED,
-            // hero-derived band (not a centre of the row), so the hero's
-            // resting position is self-contained — identical on every page
-            // regardless of whether row 1 is Continue Watching (277pt) or a
-            // poster row (444pt). Centring couples the hero's height to the
-            // row's height (~84pt drift). Deeper rows centre as usual.
-            scrollSectionToRest(sectionIndex: nextSectionIndex)
         }
+        nativeScroll.focusChanged(to: context.nextFocusedView,
+                                  target: context.nextFocusedView.flatMap(focusScrollOffset))
         updateLeftEdgeGuide(for: context.nextFocusedIndexPath)
     }
 
@@ -8374,15 +8177,33 @@ extension PlexHomeViewController: UICollectionViewDelegate {
     /// Walk a focused view's superview chain to its enclosing collection-view
     /// cell and read that cell's section.
     private func sectionIndex(forFocusedView view: UIView?) -> Int? {
-        var v: UIView? = view
-        while let current = v {
-            if let cell = current as? UICollectionViewCell,
-               let ip = self.collectionView.indexPath(for: cell) {
-                return ip.section
+        indexPath(forFocusedView: view)?.section
+    }
+
+    private func indexPath(forFocusedView view: UIView?) -> IndexPath? {
+        var current = view
+        while let view = current {
+            if let cell = view as? UICollectionViewCell, let path = collectionView.indexPath(for: cell) {
+                return path
             }
-            v = current.superview
+            current = view.superview
         }
         return nil
+    }
+
+    private func focusScrollOffset(for view: UIView) -> CGPoint? {
+        guard let path = indexPath(forFocusedView: view), sectionsSnapshot.indices.contains(path.section)
+        else { return nil }
+        let target: CGFloat?
+        switch sectionsSnapshot[path.section].kind {
+        case .hero:
+            target = -collectionView.adjustedContentInset.top
+        case .grid, .watchlistGrid:
+            target = gridRestingOffsetY(for: path, from: nativeScroll.targetOffset?.y ?? collectionView.contentOffset.y)
+        default:
+            target = restingOffsetY(forSection: path.section)
+        }
+        return target.map { CGPoint(x: 0, y: $0) }
     }
 }
 
@@ -8430,8 +8251,7 @@ extension PlexHomeViewController: MenuBackHandling, SidebarTabReselecting {
         return true
     }
 
-    /// Animates the page to its top on the shared focus-scroll curve, for the Search hand-off: it plays
-    /// alongside the keyboard expanding. Safe to animate because focus is leaving the collection.
+    /// Animates the page to its top alongside the Search keyboard expanding.
     func animateToContentTop() {
         let top = -collectionView.adjustedContentInset.top
         guard abs(collectionView.contentOffset.y - top) > 1 else { return }
@@ -8443,8 +8263,7 @@ extension PlexHomeViewController: MenuBackHandling, SidebarTabReselecting {
     /// mid-flight and lands on whatever row is passing.
     private func scrollToContentTop() {
         // Cancel any in-flight focus-scroll so it can't animate back over us.
-        offsetLink?.invalidate()
-        offsetLink = nil
+        nativeScroll.cancel()
         collectionView.contentOffset = CGPoint(x: 0, y: -collectionView.adjustedContentInset.top)
         collectionView.layoutIfNeeded()
     }
