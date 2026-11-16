@@ -18,18 +18,23 @@ final class PosterCell: UICollectionViewCell {
     /// Hosts the overlays; its transform follows the poster's focus zoom in `didUpdateFocus`.
     private let overlayContainer = UIView()
 
+    // The server and edition badges, the failure icon and title, the progress bar and the spinner
+    // are built on first use (the `ensure…` functions): most tiles never show them, and building
+    // them in every cell was a measured part of `init` as rows scroll in.
+    // Back to front: placeholder, spinner, blur band, bar, trailing badges, server badge,
+    // failure icon, failure title, watched glyph.
     private let watchedBadge = PosterWatchedBadge()
-    private let sourceBadge = SourceBadgeView(style: .onArtwork)
+    private var sourceBadge: SourceBadgeView?
     /// Plex edition ("Director's Cut"), so two editions sharing a poster tell apart.
-    private let editionBadge = SourceBadgeView(style: .onArtwork)
-    /// Top-leading column: the server badge.
-    private let topBadges = UIStackView()
+    private var editionBadge: SourceBadgeView?
     /// Top-trailing column: unwatched count, then edition badge.
     private let trailingBadges = UIStackView()
-    private let failureIcon = UIImageView()
+    private var failureIcon: UIImageView?
     /// The title on the failure card, so an item with no artwork is still named.
-    private let failureTitle = UILabel()
-    private let progressInfoBar = MediaProgressInfoBar()
+    private var failureTitle: UILabel?
+    private var progressInfoBar: MediaProgressInfoBar?
+    /// The focus look a bar built later starts with: the last of `didUpdateFocus` and a bar reset.
+    private var barFocusedState = false
 
     /// Apple-style watched glyph, bottom-left (the progress bar's slot).
     private let watchedGlyph = WatchedGlyphView()
@@ -39,7 +44,7 @@ final class PosterCell: UICollectionViewCell {
     /// on top). Plain view, not a blur — a UIVisualEffectView per cell is a
     /// measured perf cost (see `bottomInfoBlur`).
     private let placeholderPanel = UIView()
-    private let loadingSpinner = UIActivityIndicatorView(style: .large)
+    private var loadingSpinner: UIActivityIndicatorView?
     /// Delays the spinner so a fast cache hit doesn't flash it on scroll.
     private var spinnerDelayTask: Task<Void, Never>?
     /// Bottom-quarter blur under the info bar, in-progress items only. Created lazily:
@@ -52,7 +57,7 @@ final class PosterCell: UICollectionViewCell {
         let blur = BottomInfoBlurView()
         blur.translatesAutoresizingMaskIntoConstraints = false
         // Under the info bar in z-order.
-        overlayContainer.insertSubview(blur, belowSubview: progressInfoBar)
+        overlayContainer.insertSubview(blur, belowSubview: ensureProgressInfoBar())
         NSLayoutConstraint.activate([
             blur.leadingAnchor.constraint(equalTo: overlayContainer.leadingAnchor),
             blur.trailingAnchor.constraint(equalTo: overlayContainer.trailingAnchor),
@@ -63,9 +68,109 @@ final class PosterCell: UICollectionViewCell {
         return blur
     }
 
+    @discardableResult
+    private func ensureProgressInfoBar() -> MediaProgressInfoBar {
+        if let progressInfoBar { return progressInfoBar }
+        let bar = MediaProgressInfoBar()
+        bar.translatesAutoresizingMaskIntoConstraints = false
+        bar.isHidden = true
+        overlayContainer.insertSubview(bar, belowSubview: trailingBadges)
+        NSLayoutConstraint.activate([
+            // Same slot as ContinueWatchingCell's status row.
+            bar.leadingAnchor.constraint(equalTo: overlayContainer.leadingAnchor,
+                                         constant: MediaProgressInfoBar.leadingInset),
+            bar.trailingAnchor.constraint(equalTo: overlayContainer.trailingAnchor,
+                                          constant: -MediaProgressInfoBar.leadingInset),
+            bar.centerYAnchor.constraint(equalTo: overlayContainer.bottomAnchor,
+                                         constant: -MediaProgressInfoBar.centerFromBottom)
+        ])
+        bar.reset()
+        bar.setFocused(barFocusedState)
+        progressInfoBar = bar
+        return bar
+    }
+
+    /// Hides the in-progress bar and its blur band, as a reset bar.
+    private func hideProgressBar() {
+        progressInfoBar?.isHidden = true; bottomInfoBlur?.isHidden = true
+        progressInfoBar?.reset()
+        barFocusedState = false
+    }
+
+    private func ensureLoadingSpinner() -> UIActivityIndicatorView {
+        if let loadingSpinner { return loadingSpinner }
+        let spinner = UIActivityIndicatorView(style: .large)
+        spinner.translatesAutoresizingMaskIntoConstraints = false
+        spinner.color = UIColor.white.withAlphaComponent(0.7)
+        spinner.hidesWhenStopped = true
+        overlayContainer.insertSubview(spinner, aboveSubview: placeholderPanel)
+        NSLayoutConstraint.activate([
+            spinner.centerXAnchor.constraint(equalTo: overlayContainer.centerXAnchor),
+            spinner.centerYAnchor.constraint(equalTo: overlayContainer.centerYAnchor)
+        ])
+        loadingSpinner = spinner
+        return spinner
+    }
+
+    /// Server badge: top-leading, 10pt inset.
+    private func ensureSourceBadge() -> SourceBadgeView {
+        if let sourceBadge { return sourceBadge }
+        let badge = SourceBadgeView(style: .onArtwork)
+        let stack = UIStackView(arrangedSubviews: [badge])
+        stack.translatesAutoresizingMaskIntoConstraints = false
+        stack.axis = .vertical
+        stack.alignment = .leading
+        stack.spacing = 6
+        overlayContainer.insertSubview(stack, aboveSubview: trailingBadges)
+        NSLayoutConstraint.activate([
+            stack.topAnchor.constraint(equalTo: overlayContainer.topAnchor, constant: 10),
+            stack.leadingAnchor.constraint(equalTo: overlayContainer.leadingAnchor, constant: 10),
+            stack.trailingAnchor.constraint(lessThanOrEqualTo: overlayContainer.trailingAnchor, constant: -10)
+        ])
+        sourceBadge = badge
+        return badge
+    }
+
+    /// Failure icon (centred) and the title under it; shown only when the image load fails or the
+    /// source URL is missing.
+    private func ensureFailureViews() -> (icon: UIImageView, title: UILabel) {
+        if let failureIcon, let failureTitle { return (failureIcon, failureTitle) }
+        let icon = UIImageView()
+        icon.translatesAutoresizingMaskIntoConstraints = false
+        icon.contentMode = .scaleAspectFit
+        icon.tintColor = UIColor.white.withAlphaComponent(0.3)
+        icon.isHidden = true
+        overlayContainer.insertSubview(icon, belowSubview: watchedGlyph)
+
+        let title = UILabel()
+        title.translatesAutoresizingMaskIntoConstraints = false
+        title.font = .systemFont(ofSize: 24, weight: .medium)
+        title.textColor = UIColor.white.withAlphaComponent(0.6)
+        title.textAlignment = .center
+        title.numberOfLines = 4
+        title.isHidden = true
+        overlayContainer.insertSubview(title, belowSubview: watchedGlyph)
+
+        NSLayoutConstraint.activate([
+            icon.centerXAnchor.constraint(equalTo: overlayContainer.centerXAnchor),
+            icon.centerYAnchor.constraint(equalTo: overlayContainer.centerYAnchor),
+            icon.widthAnchor.constraint(equalToConstant: 32),
+            icon.heightAnchor.constraint(equalToConstant: 32),
+            title.topAnchor.constraint(equalTo: icon.bottomAnchor, constant: 12),
+            title.leadingAnchor.constraint(equalTo: overlayContainer.leadingAnchor, constant: 16),
+            title.trailingAnchor.constraint(equalTo: overlayContainer.trailingAnchor, constant: -16)
+        ])
+        failureIcon = icon
+        failureTitle = title
+        return (icon, title)
+    }
+
     private var failureTitleText: String?
     /// The title showing on the failure card (tests).
-    var failureTitleShown: String? { failureTitle.isHidden ? nil : failureTitle.text }
+    var failureTitleShown: String? {
+        guard let failureTitle, !failureTitle.isHidden else { return nil }
+        return failureTitle.text
+    }
 
     private var imageLoadTask: Task<Void, Never>?
     private var currentURL: URL?
@@ -80,7 +185,9 @@ final class PosterCell: UICollectionViewCell {
     private static let blankMusicArtwork = blank(for: MediaRowMetrics.music)
 
     static func blank(for tile: MediaRowMetrics.Tile) -> UIImage {
-        UIGraphicsImageRenderer(size: tile.art, format: .layeredArtwork(scale: 1)).image { _ in }
+        // Sized in points, stored at 0.1 px a point (26x39 px for a poster): TVPosterView scans the
+        // alpha of every image it is given on the main thread, so a full-size stand-in cost a full scan.
+        UIGraphicsImageRenderer(size: tile.art, format: .layeredArtwork(scale: 0.1)).image { _ in }
     }
 
     private var tileBlankArtwork: UIImage { tile.art == MediaRowMetrics.music.art ? Self.blankMusicArtwork : Self.blankArtwork }
@@ -134,49 +241,19 @@ final class PosterCell: UICollectionViewCell {
         placeholderPanel.isHidden = true
         overlayContainer.addSubview(placeholderPanel)
 
-        loadingSpinner.translatesAutoresizingMaskIntoConstraints = false
-        loadingSpinner.color = UIColor.white.withAlphaComponent(0.7)
-        loadingSpinner.hidesWhenStopped = true
-        overlayContainer.addSubview(loadingSpinner)
-
-        // (The blur band is created lazily — see ensureBottomInfoBlur.)
-        progressInfoBar.translatesAutoresizingMaskIntoConstraints = false
-        progressInfoBar.isHidden = true; bottomInfoBlur?.isHidden = true
-        overlayContainer.addSubview(progressInfoBar)
+        // (The spinner, blur band and progress bar are built on first use: see the ensure… functions.)
 
         // Unwatched count then edition badge: top-trailing, 10pt inset. Hidden badges collapse.
+        // The edition badge joins on first use (setEdition), after the count.
         watchedBadge.isHidden = true
         trailingBadges.translatesAutoresizingMaskIntoConstraints = false
         trailingBadges.axis = .vertical
         trailingBadges.alignment = .trailing
         trailingBadges.spacing = 6
         trailingBadges.addArrangedSubview(watchedBadge)
-        trailingBadges.addArrangedSubview(editionBadge)
         overlayContainer.addSubview(trailingBadges)
 
-        // Server badge: top-leading, 10pt inset.
-        topBadges.translatesAutoresizingMaskIntoConstraints = false
-        topBadges.axis = .vertical
-        topBadges.alignment = .leading
-        topBadges.spacing = 6
-        topBadges.addArrangedSubview(sourceBadge)
-        overlayContainer.addSubview(topBadges)
-
-        // Failure icon: centred. Hidden by default; visible only when the
-        // image load fails or the source URL is missing.
-        failureIcon.translatesAutoresizingMaskIntoConstraints = false
-        failureIcon.contentMode = .scaleAspectFit
-        failureIcon.tintColor = UIColor.white.withAlphaComponent(0.3)
-        failureIcon.isHidden = true
-        overlayContainer.addSubview(failureIcon)
-
-        failureTitle.translatesAutoresizingMaskIntoConstraints = false
-        failureTitle.font = .systemFont(ofSize: 24, weight: .medium)
-        failureTitle.textColor = UIColor.white.withAlphaComponent(0.6)
-        failureTitle.textAlignment = .center
-        failureTitle.numberOfLines = 4
-        failureTitle.isHidden = true
-        overlayContainer.addSubview(failureTitle)
+        // (The server badge and the failure icon and title are built on first use.)
 
         // Watched glyph: bottom-left, same slot as the progress bar / play icon.
         watchedGlyph.isHidden = true
@@ -198,36 +275,15 @@ final class PosterCell: UICollectionViewCell {
             overlayContainer.leadingAnchor.constraint(equalTo: posterView.imageView.leadingAnchor),
             overlayContainer.trailingAnchor.constraint(equalTo: posterView.imageView.trailingAnchor),
 
-            // Same slot as ContinueWatchingCell's status row.
-            progressInfoBar.leadingAnchor.constraint(equalTo: overlayContainer.leadingAnchor,
-                                                     constant: MediaProgressInfoBar.leadingInset),
-            progressInfoBar.trailingAnchor.constraint(equalTo: overlayContainer.trailingAnchor,
-                                                      constant: -MediaProgressInfoBar.leadingInset),
-            progressInfoBar.centerYAnchor.constraint(equalTo: overlayContainer.bottomAnchor,
-                                                     constant: -MediaProgressInfoBar.centerFromBottom),
-
             trailingBadges.topAnchor.constraint(equalTo: overlayContainer.topAnchor, constant: 10),
             trailingBadges.trailingAnchor.constraint(equalTo: overlayContainer.trailingAnchor, constant: -10),
             trailingBadges.leadingAnchor.constraint(greaterThanOrEqualTo: overlayContainer.leadingAnchor, constant: 10),
-            topBadges.topAnchor.constraint(equalTo: overlayContainer.topAnchor, constant: 10),
-            topBadges.leadingAnchor.constraint(equalTo: overlayContainer.leadingAnchor, constant: 10),
-            topBadges.trailingAnchor.constraint(lessThanOrEqualTo: overlayContainer.trailingAnchor, constant: -10),
 
-            failureIcon.centerXAnchor.constraint(equalTo: overlayContainer.centerXAnchor),
-            failureIcon.centerYAnchor.constraint(equalTo: overlayContainer.centerYAnchor),
-            failureIcon.widthAnchor.constraint(equalToConstant: 32),
-            failureIcon.heightAnchor.constraint(equalToConstant: 32),
-            failureTitle.topAnchor.constraint(equalTo: failureIcon.bottomAnchor, constant: 12),
-            failureTitle.leadingAnchor.constraint(equalTo: overlayContainer.leadingAnchor, constant: 16),
-            failureTitle.trailingAnchor.constraint(equalTo: overlayContainer.trailingAnchor, constant: -16),
-
-            // Glass placeholder fills the image surface; spinner centered on it.
+            // Glass placeholder fills the image surface.
             placeholderPanel.topAnchor.constraint(equalTo: overlayContainer.topAnchor),
             placeholderPanel.bottomAnchor.constraint(equalTo: overlayContainer.bottomAnchor),
             placeholderPanel.leadingAnchor.constraint(equalTo: overlayContainer.leadingAnchor),
             placeholderPanel.trailingAnchor.constraint(equalTo: overlayContainer.trailingAnchor),
-            loadingSpinner.centerXAnchor.constraint(equalTo: overlayContainer.centerXAnchor),
-            loadingSpinner.centerYAnchor.constraint(equalTo: overlayContainer.centerYAnchor),
 
             // Watched glyph shares the progress bar's bottom-left anchor.
             watchedGlyph.leadingAnchor.constraint(equalTo: overlayContainer.leadingAnchor,
@@ -249,9 +305,10 @@ final class PosterCell: UICollectionViewCell {
         let artSize = posterView.imageView.bounds.size
         let longSide = max(artSize.width, artSize.height)
         let scale = longSide > 0 ? 1 + tile.growth.height / longSide : 1.1
+        barFocusedState = nowFocused
         coordinator.addCoordinatedAnimations({
             self.posterView.transform = nowFocused ? self.tile.focusScale : .identity
-            self.progressInfoBar.setFocused(nowFocused)
+            self.progressInfoBar?.setFocused(nowFocused)
             self.overlayContainer.transform = nowFocused
                 ? CGAffineTransform(scaleX: scale, y: scale)
                 : .identity
@@ -280,7 +337,7 @@ final class PosterCell: UICollectionViewCell {
     // MARK: - Configure
 
     func configure(item: PlexMetadata) {
-        sourceBadge.text = nil
+        sourceBadge?.text = nil
         setSquare(["artist", "album", "track"].contains(item.type ?? ""))
         let url = posterURL(for: item)
         failureTitleText = item.title
@@ -292,7 +349,7 @@ final class PosterCell: UICollectionViewCell {
 
     /// MediaItem path. All artwork URLs are already resolved — no serverURL/token needed.
     func configure(item: MediaItem) {
-        sourceBadge.text = nil
+        sourceBadge?.text = nil
         setSquare(item.isMusic == true)
         // Episodes and seasons show the show's poster, matching the Plex path.
         let url = item.grandparentArtwork?.poster
@@ -305,27 +362,45 @@ final class PosterCell: UICollectionViewCell {
     }
 
     /// Names the item's server; call after `configure` (which never adds one).
-    func setSourceBadge(_ text: String?) { sourceBadge.text = text }
+    func setSourceBadge(_ text: String?) {
+        guard let text else { sourceBadge?.text = nil; return }
+        ensureSourceBadge().text = text
+    }
 
     /// The badge's text while it shows (tests).
-    var sourceBadgeText: String? { sourceBadge.isHidden ? nil : sourceBadge.text }
+    var sourceBadgeText: String? {
+        guard let sourceBadge, !sourceBadge.isHidden else { return nil }
+        return sourceBadge.text
+    }
 
     private func setEdition(_ edition: String?) {
-        editionBadge.text = MediaItem.shortEdition(edition)
+        let short = MediaItem.shortEdition(edition)
+        if short != nil, editionBadge == nil {
+            let badge = SourceBadgeView(style: .onArtwork)
+            trailingBadges.addArrangedSubview(badge)   // after the unwatched count
+            editionBadge = badge
+        }
+        editionBadge?.text = short
     }
 
     /// The edition badge's text while it shows (tests).
-    var editionBadgeText: String? { editionBadge.isHidden ? nil : editionBadge.text }
+    var editionBadgeText: String? {
+        guard let editionBadge, !editionBadge.isHidden else { return nil }
+        return editionBadge.text
+    }
 
     /// Music tiles are 1:1 square; everything else keeps the 2:3 poster ratio.
     private func setSquare(_ square: Bool) {
         tile = square ? MediaRowMetrics.music : MediaRowMetrics.poster
         let host = tile.hostSize
-        if posterHeightConstraint.constant != host.height {
+        let shapeChanged = posterHeightConstraint.constant != host.height
+        if shapeChanged {
             posterWidthConstraint.constant = host.width
             posterHeightConstraint.constant = host.height
         }
-        if !hasArtwork { posterView.image = tileBlankArtwork }
+        // Only when the aspect changes (#504): without art the image is already this aspect's
+        // stand-in. Each `TVPosterView.image` set scans the image's alpha.
+        if !hasArtwork, shapeChanged { posterView.image = tileBlankArtwork }
     }
 
     override func prepareForReuse() {
@@ -347,20 +422,19 @@ final class PosterCell: UICollectionViewCell {
         imageLoadTask?.cancel()
         imageLoadTask = nil
         cancelSpinnerDelay()
-        loadingSpinner.stopAnimating()
+        loadingSpinner?.stopAnimating()
         placeholderPanel.isHidden = true
         currentURL = nil
         clearArtwork()
-        progressInfoBar.isHidden = true; bottomInfoBlur?.isHidden = true
-        progressInfoBar.reset()
+        hideProgressBar()
         watchedBadge.isHidden = true
-        sourceBadge.text = nil
-        editionBadge.text = nil
+        sourceBadge?.text = nil
+        editionBadge?.text = nil
         watchedGlyph.isHidden = true
-        failureIcon.isHidden = true
-        failureIcon.image = nil
-        failureTitle.isHidden = true
-        failureTitle.text = nil
+        failureIcon?.isHidden = true
+        failureIcon?.image = nil
+        failureTitle?.isHidden = true
+        failureTitle?.text = nil
         // A recycled cell must not inherit a prior occupant's stranded focus
         // (enlarged) appearance — clear any leftover scale transform.
         resetStaleFocusAppearance()
@@ -432,15 +506,15 @@ final class PosterCell: UICollectionViewCell {
     /// Glass panel + (delayed) spinner while the artwork loads/retries.
     private func showPlaceholderLoading() {
         placeholderPanel.isHidden = false
-        failureIcon.isHidden = true
-        failureTitle.isHidden = true
+        failureIcon?.isHidden = true
+        failureTitle?.isHidden = true
         // Delay the spinner so a fast cache hit doesn't flash it on scroll.
         cancelSpinnerDelay()
         spinnerDelayTask = Task { [weak self] in
             try? await Task.sleep(nanoseconds: 150_000_000)
             guard let self, !Task.isCancelled else { return }
             if !self.placeholderPanel.isHidden, !self.hasArtwork {
-                self.loadingSpinner.startAnimating()
+                self.ensureLoadingSpinner().startAnimating()
             }
         }
     }
@@ -448,21 +522,22 @@ final class PosterCell: UICollectionViewCell {
     /// Glass panel + faint type icon after a genuine (post-retry) failure.
     private func showPlaceholderFailure(_ icon: UIImage?) {
         cancelSpinnerDelay()
-        loadingSpinner.stopAnimating()
+        loadingSpinner?.stopAnimating()
         placeholderPanel.isHidden = false
-        failureIcon.image = icon
-        failureIcon.isHidden = false
-        failureTitle.text = failureTitleText
-        failureTitle.isHidden = (failureTitleText ?? "").isEmpty
+        let failure = ensureFailureViews()
+        failure.icon.image = icon
+        failure.icon.isHidden = false
+        failure.title.text = failureTitleText
+        failure.title.isHidden = (failureTitleText ?? "").isEmpty
     }
 
     /// Artwork resolved — tear the placeholder down.
     private func hidePlaceholder() {
         cancelSpinnerDelay()
-        loadingSpinner.stopAnimating()
+        loadingSpinner?.stopAnimating()
         placeholderPanel.isHidden = true
-        failureIcon.isHidden = true
-        failureTitle.isHidden = true
+        failureIcon?.isHidden = true
+        failureTitle?.isHidden = true
     }
 
     private func cancelSpinnerDelay() {
@@ -483,8 +558,7 @@ final class PosterCell: UICollectionViewCell {
         case "track":   name = "music.note"
         default:        name = "photo"
         }
-        return UIImage(systemName: name)?
-            .withConfiguration(UIImage.SymbolConfiguration(pointSize: 32, weight: .light))
+        return TileSymbolIcon.image(name)
     }
 
     /// MediaItem failure icon — maps MediaKind to a system image name.
@@ -498,8 +572,7 @@ final class PosterCell: UICollectionViewCell {
         case .person:  name = "person"
         default:       name = "photo"
         }
-        return UIImage(systemName: name)?
-            .withConfiguration(UIImage.SymbolConfiguration(pointSize: 32, weight: .light))
+        return TileSymbolIcon.image(name)
     }
 
     private func posterURL(for item: PlexMetadata) -> URL? {
@@ -526,16 +599,15 @@ final class PosterCell: UICollectionViewCell {
         // (0 < watchProgress < 1). Audio items (album / artist / track)
         // suppress progress entirely.
         if isAudioItem(item) {
-            progressInfoBar.isHidden = true; bottomInfoBlur?.isHidden = true
-            progressInfoBar.reset()
+            hideProgressBar()
             return
         }
         if let progress = item.watchProgress, progress > 0, progress < 1 {
-            progressInfoBar.isHidden = false; ensureBottomInfoBlur().isHidden = false
-            progressInfoBar.configure(item: item)
+            let bar = ensureProgressInfoBar()
+            bar.isHidden = false; ensureBottomInfoBlur().isHidden = false
+            bar.configure(item: item)
         } else {
-            progressInfoBar.isHidden = true; bottomInfoBlur?.isHidden = true
-            progressInfoBar.reset()
+            hideProgressBar()
         }
     }
 
@@ -594,8 +666,7 @@ final class PosterCell: UICollectionViewCell {
         // MediaItem has no audio kind equivalent; only person/collection/playlist are
         // "no progress" -- treat anything without a runtime as suppressed.
         guard item.kind != .person, item.kind != .collection, item.kind != .playlist else {
-            progressInfoBar.isHidden = true; bottomInfoBlur?.isHidden = true
-            progressInfoBar.reset()
+            hideProgressBar()
             return
         }
         let offset = item.userState.viewOffset
@@ -606,11 +677,11 @@ final class PosterCell: UICollectionViewCell {
             fraction = 0
         }
         if fraction > 0 && fraction < 1 {
-            progressInfoBar.isHidden = false; ensureBottomInfoBlur().isHidden = false
-            progressInfoBar.configure(item: item)
+            let bar = ensureProgressInfoBar()
+            bar.isHidden = false; ensureBottomInfoBlur().isHidden = false
+            bar.configure(item: item)
         } else {
-            progressInfoBar.isHidden = true; bottomInfoBlur?.isHidden = true
-            progressInfoBar.reset()
+            hideProgressBar()
         }
     }
 
@@ -741,4 +812,19 @@ extension PosterCell: PreviewSourceTile {
     var previewArtworkView: UIView { overlayContainer }
     var previewCornerRadius: CGFloat { cornerRadius }
     var previewArtworkLoaded: Bool { hasArtwork }
+}
+
+/// Placeholder and failure symbols, built once per name. Each tile configure used to rebuild its
+/// symbol image even on an artwork cache hit, inside row-scroll commits.
+@MainActor
+enum TileSymbolIcon {
+    private static var cache: [String: UIImage] = [:]
+
+    static func image(_ name: String) -> UIImage? {
+        if let hit = cache[name] { return hit }
+        let image = UIImage(systemName: name)?
+            .withConfiguration(UIImage.SymbolConfiguration(pointSize: 32, weight: .light))
+        if let image { cache[name] = image }
+        return image
+    }
 }

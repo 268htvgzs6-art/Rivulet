@@ -92,13 +92,29 @@ final class MediaProgressInfoBar: UIView {
     static let leadingInset: CGFloat = 16
     static let centerFromBottom: CGFloat = 27.5
 
+    /// Focus look the owner wants, and the one last drawn. Drawn only while visible: PosterCell hides
+    /// the bar on every tile not in progress, and each colour set runs UIKit's tint visitor.
+    private var wantsFocused = false
+    private var drawnFocused: Bool?
+
     /// Glyph, label and bar fill go full white on the focused card. Call it
     /// inside the focus animation coordinator.
     func setFocused(_ focused: Bool) {
-        let text = UIColor.white.withAlphaComponent(focused ? 1 : 0.5)
+        wantsFocused = focused
+        if !isHidden { drawFocusColours() }
+    }
+
+    override var isHidden: Bool {
+        didSet { if oldValue, !isHidden { drawFocusColours() } }
+    }
+
+    private func drawFocusColours() {
+        guard drawnFocused != wantsFocused else { return }
+        drawnFocused = wantsFocused
+        let text = UIColor.white.withAlphaComponent(wantsFocused ? 1 : 0.5)
         playIcon.tintColor = text
         infoLabel.textColor = text
-        progressFill.backgroundColor = focused ? .white : .tertiaryLabel
+        progressFill.backgroundColor = wantsFocused ? .white : .tertiaryLabel
     }
 
     func configure(item: PlexMetadata) {
