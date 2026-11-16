@@ -8915,6 +8915,7 @@
         }
       }
     },
+    "Font" : {},
     "For You" : {
       "localizations" : {
         "de" : {
@@ -19974,6 +19975,7 @@
       }
     },
     "Subtitle Brightness" : {},
+    "Subtitle Font" : {},
     "Subtitle Language" : {
       "localizations" : {
         "de" : {
@@ -20356,6 +20358,7 @@
         }
       }
     },
+    "System" : {},
     "TMDB users" : {
       "localizations" : {
         "de" : {
@@ -21311,6 +21314,7 @@
         }
       }
     },
+    "The typeface for plain subtitles, from the Arabic fonts on this Apple TV. Also in the player's Subtitles menu. Styled ASS subtitles keep their own." : {},
     "The username your provider gave you." : {
       "localizations" : {
         "de" : {

@@ -110,6 +110,9 @@ struct RivuletApp: App {
         let info = Bundle.main.infoDictionary ?? [:]
         DiagLog.notice(.launch, "Launch \(info["CFBundleShortVersionString"] as? String ?? "?") (\(info["CFBundleVersion"] as? String ?? "?")) tvOS \(ProcessInfo.processInfo.operatingSystemVersionString) signed_in=\(PlexAuthManager.shared.hasCredentials) setup=\(UserDefaults.standard.bool(forKey: "setupComplete"))")
 
+        // Lists the installed Arabic subtitle fonts off the main thread.
+        SubtitleAppearance.prepareFontsAtLaunch()
+
         // NowPlayingService disabled — AVPlayerViewController handles Now Playing natively.
         // NowPlayingService.shared.initialize()
 

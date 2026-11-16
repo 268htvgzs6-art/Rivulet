@@ -43,6 +43,7 @@ enum SettingsDescriptorStore {
         if id.hasPrefix("sl_") { return descriptors["subtitleLanguage"] }
         if id.hasPrefix("hs_") { return descriptors["heightSpeakers"] }
         if id.hasPrefix("sm_") { return descriptors["subtitleMode"] }
+        if id.hasPrefix("sf_") { return descriptors["subtitleFont"] }
         if id.hasPrefix("ai_") { return descriptors["appIcon"] }
         if id.hasPrefix("hh_") { return descriptors["homeHero"] }
         if id.hasPrefix("dr_") { return descriptors["detailRating"] }
@@ -235,6 +236,10 @@ enum SettingsDescriptorStore {
         "subtitleSDH": SettingDescriptor(
             icon: "ear",
             description: "Subtitles that also describe sounds and name who is speaking."
+        ),
+        "subtitleFont": SettingDescriptor(
+            icon: "textformat",
+            description: "The typeface for plain subtitles, from the Arabic fonts on this Apple TV. Also in the player's Subtitles menu. Styled ASS subtitles keep their own."
         ),
         "subtitleBrightness": SettingDescriptor(
             icon: "sun.min",
@@ -691,6 +696,7 @@ enum SettingsDescriptorStore {
         case .skipBackIntervalPicker: return ("backward.fill", .systemBlue)
         case .heightSpeakersPicker: return ("hifispeaker.2", .systemCyan)
         case .subtitleModePicker: return ("captions.bubble", .systemYellow)
+        case .subtitleFontPicker: return ("textformat", .systemYellow)
         case .autoplayLimitPicker: return ("moon.zzz", .systemPurple)
         case .homeQualityPicker: return ("house.fill", .systemBlue)
         case .awayQualityPicker: return ("antenna.radiowaves.left.and.right", .systemBlue)

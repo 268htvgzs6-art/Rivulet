@@ -116,10 +116,11 @@ final class CardTrackListView: UIView, RailPanelMenuHandling {
             }
         }
         let value = tracks.first { $0.id == (selectedTrackId ?? onTrackId) }?.subtitleMenuTitle
-        // Brightness after the other steppers: it writes the Settings key and restyles the
-        // captions while the video plays.
+        // Font (a submenu) after Style, and Brightness after the other steppers. Both write
+        // the same keys as Settings and restyle the captions while the video plays.
         return CardTrackListView(header: String(localized: "Subtitles"), rows: rows, actions: actions,
-                                 choices: [CardChoiceConfig.captionStyle()].compactMap { $0 },
+                                 choices: [CardChoiceConfig.captionStyle(), CardChoiceConfig.subtitleFont()]
+                                     .compactMap { $0 },
                                  steppers: steppers + [CardStepperConfig.subtitleBrightness()],
                                  languageRows: languageRows, languageValue: value,
                                  onSelect: onSelect)
@@ -532,6 +533,22 @@ extension CardChoiceConfig {
             options: styles.map(\.name),
             selected: { styles.firstIndex { $0.id == CaptionAppearance.activeStyleID } ?? -1 },
             onSelect: { CaptionAppearance.activeStyleID = styles[$0].id })
+    }
+
+    /// The Subtitle Font setting in the player, the same list as Settings: System, then the
+    /// installed Arabic families. A pick restyles the captions at once.
+    static func subtitleFont() -> CardChoiceConfig {
+        let families = SubtitleAppearance.availableArabicFamilies
+        return CardChoiceConfig(
+            title: String(localized: "Font"),
+            options: [String(localized: "System")] + families.map(SubtitleAppearance.displayName),
+            selected: {
+                guard SubtitleAppearance.fontFamily != nil else { return 0 }
+                return families.firstIndex { SubtitleAppearance.isFontSelected($0) }.map { $0 + 1 } ?? 0
+            },
+            onSelect: { index in
+                SubtitleAppearance.fontFamily = index == 0 ? nil : families[index - 1]
+            })
     }
 }
 

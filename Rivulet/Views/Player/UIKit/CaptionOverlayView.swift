@@ -871,7 +871,8 @@ private final class CaptionBoxView: UIView {
         // the system caption font at the same size rather than to a default that
         // would ignore the user's choice entirely.
         var font: UIFont
-        if style.allowsContentFont, let name = run.fontName, !name.isEmpty,
+        // A chosen Subtitle Font wins over the cue's own face name.
+        if style.allowsContentFont, !style.usesChosenFont, let name = run.fontName, !name.isEmpty,
            let named = UIFont(name: name, size: size) {
             font = named
         } else {

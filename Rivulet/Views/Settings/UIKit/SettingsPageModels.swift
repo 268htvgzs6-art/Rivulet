@@ -245,6 +245,7 @@ enum SettingsContent {
         case .skipBackIntervalPicker: return skipBackIntervalPicker
         case .heightSpeakersPicker:   return heightSpeakersPicker
         case .subtitleModePicker:     return subtitleModePicker
+        case .subtitleFontPicker:     return subtitleFontPicker
         case .autoplayLimitPicker:    return autoplayLimitPicker
         case .homeQualityPicker:      return qualityPicker(home: true)
         case .awayQualityPicker:      return qualityPicker(home: false)
@@ -372,6 +373,20 @@ enum SettingsContent {
                 isSelected: { SubtitleMode.current == mode },
                 select: { TrackIntentStore.setSubtitles(mode: mode) }))
         }
+    }
+
+    /// System (the Accessibility caption font), then every Arabic family this device can load.
+    /// Read by `CaptionAppearance.current()`; the player's Font row shows the same list.
+    private static var subtitleFontPicker: [SettingsRowItem] {
+        func row(_ id: String, _ label: String, _ family: String?) -> SettingsRowItem {
+            SettingsRowItem(id: id, verbatim: label, kind: .option(
+                isSelected: { SubtitleAppearance.isFontSelected(family) },
+                select: { SubtitleAppearance.fontFamily = family }))
+        }
+        return [row("sf_system", String(localized: "System"), nil)]
+            + SubtitleAppearance.availableArabicFamilies.map {
+                row("sf_\($0)", SubtitleAppearance.displayName($0), $0)
+            }
     }
 
     private static var autoplayLimitPicker: [SettingsRowItem] {
@@ -560,7 +575,9 @@ enum SettingsContent {
                             kind: .toggle(get: { TrackIntentStore.subtitleSDH },
                                           set: { TrackIntentStore.setSubtitles(sdh: $0) }),
                             isEnabled: subtitlesOn),
-            // Dims plain, libass and picture captions alike.
+            // Font for plain captions; brightness for every kind (plain, libass and picture).
+            SettingsRowItem(id: "subtitleFont", title: "Subtitle Font",
+                            kind: .navigationValue(.subtitleFontPicker, value: { SubtitleAppearance.fontValueLabel })),
             SettingsRowItem(id: "subtitleBrightness", title: "Subtitle Brightness",
                             kind: .cycle(value: { SubtitleAppearance.brightnessLabel(SubtitleAppearance.brightness) },
                                          next: {

@@ -88,6 +88,10 @@ struct CaptionStyle: Equatable, @unchecked Sendable {
     /// renderer applies it to content colours (`dimmed`), picture cues and libass.
     var textBrightness: Double = 1
 
+    /// True when `fontDescriptor` is the Subtitle Font setting, which then wins
+    /// over a cue's own font face.
+    var usesChosenFont: Bool = false
+
     /// A content colour at the Subtitle Brightness, alpha kept.
     func dimmed(_ color: CGColor) -> CGColor {
         SubtitleAppearance.dim(color, by: textBrightness)
@@ -152,6 +156,7 @@ struct CaptionStyle: Equatable, @unchecked Sendable {
             && lhs.allowsContentFont == rhs.allowsContentFont
             && lhs.edge == rhs.edge
             && lhs.textBrightness == rhs.textBrightness
+            && lhs.usesChosenFont == rhs.usesChosenFont
             && descriptorsEqual(lhs.fontDescriptor, rhs.fontDescriptor)
     }
 
@@ -228,9 +233,13 @@ enum CaptionAppearance {
         let scale = fontScale(forRelativeSize: relative)
 
         // Font (system caption font descriptor)
-        let fontDescriptor = MACaptionAppearanceCopyFontDescriptorForStyle(.user, &behavior, .default)
+        let systemFontDescriptor = MACaptionAppearanceCopyFontDescriptorForStyle(.user, &behavior, .default)
             .takeRetainedValue()
         let allowsContentFont = contentMayOverride()
+        // The Subtitle Font setting replaces the system caption font when its
+        // family loads on this device.
+        let chosenFontDescriptor = SubtitleAppearance.fontDescriptor(forFamily: SubtitleAppearance.fontFamily)
+        let fontDescriptor = chosenFontDescriptor ?? systemFontDescriptor
         // Subtitle Brightness dims the text colour, never the box.
         let brightness = SubtitleAppearance.brightness
 
@@ -261,7 +270,8 @@ enum CaptionAppearance {
             fontDescriptor: fontDescriptor,
             allowsContentFont: allowsContentFont,
             edge: edge,
-            textBrightness: brightness
+            textBrightness: brightness,
+            usesChosenFont: chosenFontDescriptor != nil
         )
     }
 
