@@ -6805,6 +6805,12 @@ final class PlexHomeViewController: UIViewController {
     /// Springs to `targetY` (`FocusScrollMotion.spring`). A scroll already in
     /// flight is retargeted and keeps its speed, so rapid moves never restart.
     private func animateContentOffset(toY targetY: CGFloat) {
+        // A press further along the way the page is moving adds a little speed, so a run of
+        // presses builds momentum. Only a new target counts: Search can ask twice for one press.
+        if offsetLink != nil, (targetY - offsetTargetY) * offsetVelocity > 0 {
+            let speed = FocusScrollMotion.maxVerticalSpeed
+            offsetVelocity = min(max(offsetVelocity * FocusScrollMotion.verticalMomentum, -speed), speed)
+        }
         offsetTargetY = targetY
         guard offsetLink == nil else { return }
         offsetVelocity = 0
@@ -6839,9 +6845,15 @@ final class PlexHomeViewController: UIViewController {
         // under a pixel); if something did (a snapshot shift, a restore), start from where it is.
         let shown = collectionView.contentOffset.y
         let from = abs(shown - offsetModelY) < 1 ? offsetModelY : shown
+        // A soft landing mid-page; critically damped at the top and bottom, so the page never
+        // swings past its ends.
+        let top = -collectionView.adjustedContentInset.top
+        let bottom = max(top, collectionView.contentSize.height - collectionView.bounds.height)
+        let atEnd = offsetTargetY <= top + 1 || offsetTargetY >= bottom - 1
         let step = FocusScrollMotion.spring(from: from, to: offsetTargetY, velocity: offsetVelocity,
                                             dt: now - offsetLastTick, viewport: collectionView.bounds.height,
-                                            response: FocusScrollMotion.verticalResponse)
+                                            response: FocusScrollMotion.verticalResponse,
+                                            damping: atEnd ? 1 : FocusScrollMotion.verticalDamping)
         offsetLastTick = now
         offsetVelocity = step.velocity
         offsetModelY = step.y
