@@ -27,9 +27,6 @@ nonisolated struct HomeSectionID: Hashable, Sendable {
     /// Favorites-mode-only: the two rows, movies then shows.
     static let favoriteMovies = HomeSectionID(raw: "favorites.movies")
     static let favoriteShows = HomeSectionID(raw: "favorites.shows")
-    /// Library-mode-only: the library's Collections shelf. Each library key
-    /// has its own cached controller, so the id cannot collide.
-    static let libraryCollections = HomeSectionID(raw: "collections")
     /// Search-mode-only sections: the empty-query prompt, the inline
     /// searching/error/no-results state, and the grouped result grids.
     static let searchPrompt = HomeSectionID(raw: "search.prompt")
@@ -544,9 +541,8 @@ final class PlexHomeViewController: UIViewController {
     private var isLoadingLibraryHubs = false
     private var libraryHubsError: String?
     /// This library's non-empty collections in server order, filled by
-    /// refreshThisLibraryHubs. Feeds the Collections row and, while the
-    /// Collections view is on, the grid. Kept as-is
-    /// when a fetch fails.
+    /// refreshThisLibraryHubs. Feeds the grid while the View menu's
+    /// Collections view is on. Kept as-is when a fetch fails.
     private var libraryCollections: [MediaItem] = []
     /// A provider library's own rows (Continue Watching, Recently Added), the
     /// counterpart of `dataStore.libraryItemsByKey[key]` for Plex.
@@ -1505,13 +1501,12 @@ final class PlexHomeViewController: UIViewController {
         }
     }
 
-    /// The apply for refreshThisLibraryHubs. The Collections row has no warm cache, so it can appear or
-    /// vanish on a live page; shift the offset by however far the apply moved the focused section, or
-    /// a row inserted above pushes the focused tile down.
+    /// The apply for refreshThisLibraryHubs. Pinned collection rows have no warm cache, so they can
+    /// appear or vanish on a live page; shift the offset by however far the apply moved the focused
+    /// section, or a row inserted above pushes the focused tile down.
     private func applySnapshotKeepingFocusedRowStill() {
-        // Pinned rows arrive the same way, right after it.
         func lateRows() -> [HomeSectionID] {
-            sectionsSnapshot.map(\.id).filter { $0 == .libraryCollections || $0.raw.hasPrefix("libraryPin:") }
+            sectionsSnapshot.map(\.id).filter { $0.raw.hasPrefix("libraryPin:") }
         }
         let lateRowsBefore = lateRows()
         let focusedID = focusedSectionForHandoff.flatMap { sectionsSnapshot[safe: $0]?.id }
@@ -3608,8 +3603,7 @@ final class PlexHomeViewController: UIViewController {
     private var librarySnapshotSettings: [Bool] {
         let defaults = UserDefaults.standard
         return [showHomeHero,
-                (defaults.object(forKey: "showLibraryRecentRows") as? Bool) ?? true,
-                (defaults.object(forKey: "showLibraryRecommendations") as? Bool) ?? true]
+                (defaults.object(forKey: "showLibraryRecentRows") as? Bool) ?? true]
     }
     private var lastLibrarySnapshotSettings: [Bool] = []
     /// The watchlist's first entries mapped to library or TMDB items, and the entry ids they came from.
@@ -5038,11 +5032,13 @@ final class PlexHomeViewController: UIViewController {
         }
     }
 
-    /// Library-mode section assembly: hero (from the library's own hubs) +
-    /// one row per library hub, in Plex's order — its Continue Watching,
-    /// Recently Added/Released, genre rows, etc. No watchlist row, no
-    /// recommendations. Rows reuse the home's hub pipeline verbatim, so they
-    /// get `mergedItems` pagination (hubKey) for free.
+    /// Library-mode section assembly: hero (from the library's own hubs), the
+    /// library's Recently Added row and any collections pinned to the page, then
+    /// the sort header and the whole-library grid. The library's other hubs
+    /// (Continue Watching, Recently Released, genre rows, …) are not rows here:
+    /// Continue Watching is on Home, and the grid with its Sort and View menus
+    /// covers the rest. The row reuses the home's hub pipeline verbatim, so it
+    /// gets `mergedItems` pagination (hubKey) for free.
     private func computeLibrarySections(libraryKey key: String, libraryTitle: String) -> [HomeSectionData] {
         var sections: [HomeSectionData] = []
 
@@ -5056,17 +5052,16 @@ final class PlexHomeViewController: UIViewController {
             }
         }
 
-        // Library hub rows come from `dataStore.libraryItemsByKey[key]`. The Recent and Discovery Rows
-        // gates apply here at render time, never in `projectLibraryItems`, which writes the on-disk rail.
+        // Library hub rows come from `dataStore.libraryItemsByKey[key]`. The Recent Rows gate
+        // applies here at render time, never in `projectLibraryItems`, which writes the on-disk rail.
         let showRecentRows = (UserDefaults.standard.object(forKey: "showLibraryRecentRows") as? Bool) ?? true
-        let showDiscoveryRows = (UserDefaults.standard.object(forKey: "showLibraryRecommendations") as? Bool) ?? true
 
         let firstHubRow = sections.count
         var hubRowKinds: [(isContinueWatching: Bool, isRecent: Bool)] = []
-        let hubRows = providerLibrary == nil ? (dataStore.libraryItemsByKey[key] ?? []) : providerLibraryRows
+        let allHubRows = providerLibrary == nil ? (dataStore.libraryItemsByKey[key] ?? []) : providerLibraryRows
+        let hubRows = allHubRows.first(where: Self.isRecentlyAddedRow).map { [$0] } ?? []
         for hub in hubRows {
             if !showRecentRows, Self.isRecentRow(hub) { continue }
-            if !showDiscoveryRows, !isEssentialRow(hub) { continue }
             hubRowKinds.append((isContinueWatching: hub.isContinueWatching, isRecent: Self.isRecentRow(hub)))
             let id = HomeSectionID(raw: hub.id)
             let merged = mergedItems(forSection: id, initial: hub.items)
@@ -5085,28 +5080,10 @@ final class PlexHomeViewController: UIViewController {
             ))
         }
 
-        // Collections: placed after the gates, so it follows whatever CW and
-        // recent rows survive. Not part of projectLibraryItems (that rail is
-        // written to disk and re-projected without this list), so it has no
-        // warm-launch cache and arrives with refreshThisLibraryHubs. No
-        // hubKey, so loadMoreIfNeeded never pages it.
-        if !libraryCollections.isEmpty {
-            sections.insert(.hub(
-                id: .libraryCollections,
-                title: String(localized: "Collections"),
-                items: libraryCollections,
-                isContinueWatching: false,
-                hubKey: nil,
-                hubIdentifier: nil,
-                totalSize: libraryCollections.count
-            ), at: firstHubRow + Self.collectionsRowInsertionIndex(rows: hubRowKinds))
-        }
-
-        // Collections pinned to this page, right after the Collections row.
-        // Not gated by Recent / Discovery Rows: the user asked for each one.
+        // Collections pinned to this page, right after the Recently Added row.
+        // Not gated by Recent Rows: the user asked for each one.
         if let libraryUUID = dataStore.libraries.first(where: { $0.key == key })?.uuid {
             var at = firstHubRow + Self.collectionsRowInsertionIndex(rows: hubRowKinds)
-                + (libraryCollections.isEmpty ? 0 : 1)
             let rows = Self.libraryPinRows(
                 pins: HomeCollectionPins.pins(in: .library), libraryUUID: libraryUUID,
                 hubKeys: Set((dataStore.libraryHubs[key] ?? []).compactMap(\.key)),
@@ -5149,23 +5126,12 @@ final class PlexHomeViewController: UIViewController {
             || id.contains("newestreleases") || title.contains("newest releases")
     }
 
-    /// Where the Collections row goes among a library's hub rows: right after
-    /// the LAST Continue Watching or recent row, else first. Keyed on the
-    /// last essential row so a genre or promoted-collection hub that an
-    /// admin moved above them cannot pull Collections up with it.
+    /// Where a library page's collection rows (those pinned to it) go among its
+    /// hub rows: right after the LAST Continue Watching or recent row, else
+    /// first. Keyed on the last of those rows so a genre or promoted-collection
+    /// hub that an admin moved above them cannot pull the collections up with it.
     nonisolated static func collectionsRowInsertionIndex(rows: [(isContinueWatching: Bool, isRecent: Bool)]) -> Int {
         rows.lastIndex { $0.isContinueWatching || $0.isRecent }.map { $0 + 1 } ?? 0
-    }
-
-    /// An "essential" library row: Continue Watching / On Deck, the recent rows,
-    /// or Recently Played (music). Everything else is a discovery row (genre,
-    /// studio, director, Rediscover, …) and is gated by "Discovery Rows".
-    /// Continue Watching is not re-detected here — `CachedHomeHub` already
-    /// carries the flag the CW cell and metrics run on.
-    private func isEssentialRow(_ hub: CachedHomeHub) -> Bool {
-        if hub.isContinueWatching || Self.isRecentRow(hub) { return true }
-        let id = (hub.hubIdentifier ?? "").lowercased()
-        return id.contains("recentlyplayed") || hub.title.lowercased().contains("recently played")
     }
 
     /// A library's own "Continue Watching" hub, detected by identifier/title

@@ -2801,28 +2801,6 @@
         }
       }
     },
-    "Adds discovery rows like Top Rated, Rediscover, and Similar Items to help you find things to watch." : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Fügt Empfehlungsreihen wie „Bestbewertet“, „Wiederentdecken“ und „Ähnliche Titel“ hinzu, damit du leichter etwas zum Ansehen findest."
-          }
-        },
-        "el" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Προσθέτει σειρές ανακάλυψης όπως «Κορυφαία βαθμολογία», «Ξαναανακάλυψε» και «Παρόμοιοι τίτλοι», για να βρίσκεις τι θα δεις."
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Ajoute des rangées comme Les mieux notés, À redécouvrir et Titres similaires pour vous aider à trouver quoi regarder."
-          }
-        }
-      }
-    },
     "Ads" : {
       "localizations" : {
         "de" : {
@@ -6803,28 +6781,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Découvrir"
-          }
-        }
-      }
-    },
-    "Discovery Rows" : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Empfehlungsreihen"
-          }
-        },
-        "el" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Σειρές ανακάλυψης"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Rangées de découverte"
           }
         }
       }
@@ -18529,27 +18485,8 @@
         }
       }
     },
-    "Shows Recently Added and Recently Released rows in each library." : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Zeigt in jeder Mediathek die Reihen „Zuletzt hinzugefügt“ und „Zuletzt erschienen“."
-          }
-        },
-        "el" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Εμφανίζει σειρές «Προστέθηκαν πρόσφατα» και «Κυκλοφόρησαν πρόσφατα» σε κάθε βιβλιοθήκη."
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Affiche Ajouts récents et Sorties récentes dans chaque bibliothèque."
-          }
-        }
-      }
+    "Shows a Recently Added row in each library." : {
+
     },
     "Asks before closing multiview, so one press can't end every stream." : {
       "localizations" : {

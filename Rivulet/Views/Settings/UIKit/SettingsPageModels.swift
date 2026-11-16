@@ -514,7 +514,6 @@ enum SettingsContent {
         rows += [
             .header("Library"),
             toggle("libraryHero", "Hero", key: "showLibraryHero", default: true),
-            toggle("discoveryRows", "Discovery Rows", key: "showLibraryRecommendations", default: true),
             toggle("recentRows", "Recent Rows", key: "showLibraryRecentRows", default: true),
 
             .header("Details"),
