@@ -36,7 +36,7 @@ final class SettingsSectionHeaderTests: XCTestCase {
         }
         // "Hero", not "Library Hero" — the caption already says Library.
         XCTAssertEqual(Array(titles[(library + 1)..<details]),
-                       ["Hero", "Discovery Rows", "Recent Rows"])
+                       ["Hero", "Recent Rows"])
     }
 
     /// Two rows are now both titled "Hero" (under HOME and under LIBRARY). They

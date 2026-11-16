@@ -175,13 +175,9 @@ enum SettingsDescriptorStore {
             icon: "rectangle.stack",
             description: "Shows a banner of featured titles at the top of each library."
         ),
-        "discoveryRows": SettingDescriptor(
-            icon: "square.stack.3d.up",
-            description: "Adds discovery rows like Top Rated, Rediscover, and Similar Items to help you find things to watch."
-        ),
         "recentRows": SettingDescriptor(
             icon: "clock.arrow.trianglehead.counterclockwise.rotate.90",
-            description: "Shows Recently Added and Recently Released rows in each library."
+            description: "Shows a Recently Added row in each library."
         ),
         "personalizedRecs": SettingDescriptor(
             icon: "person.3",

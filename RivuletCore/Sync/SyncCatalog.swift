@@ -15,7 +15,7 @@ nonisolated enum SyncCatalog {
     static let exactKeys: Set<String> = [
         // Home and Library
         "showHomeHero", "homeHeroContent", "showLibraryHero", "showLibraryRecentRows",
-        "showLibraryRecommendations", "enablePersonalizedRecommendations", "showDiscoverTab", "showWatchlistTab", "showFavoritesTab",
+        "enablePersonalizedRecommendations", "showDiscoverTab", "showWatchlistTab", "showFavoritesTab",
         // Playback
         "autoplayLimit", "autoplayCountdown", "atTheCredits", "promptResumeOrRestart",
         "continueWatchingInstantResume", "skipPreviewCarousel", "useIntroDB", "cinemaTrailersCount",
