@@ -52,6 +52,8 @@ nonisolated enum SyncCatalog {
         "plexDisabledServers",
         // Photos
         "photoSlideInterval", "photoSlideTransition", "photoSlidePlaysClips",
+        // Music
+        "musicLoudnessLeveling",
     ]
 
     /// Keys stored once per Plex Home profile (`_user_<id>`) or non-Plex server (`_provider_<id>`).
