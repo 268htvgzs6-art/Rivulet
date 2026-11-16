@@ -55,6 +55,8 @@ final class PreviewCarouselViewController: UIViewController {
     }
     private var pagingAnimation: PagingAnimation?
     private var displayLink: CADisplayLink?
+    /// The frame time the paging tick last drew for; nil until the running link first ticks.
+    private var lastPagingFrameTime: CFTimeInterval?
 
     /// Held so the gesture delegate can tell them from the horizontal paging swipes.
     private var verticalSwipeRecognizers: [UISwipeGestureRecognizer] = []
@@ -1167,7 +1169,10 @@ final class PreviewCarouselViewController: UIViewController {
             }
         }
 
-        let now = CACurrentMediaTime()
+        // Mid-glide, anchor the new curve on the frame the last tick drew (ticks run on frame
+        // time, so the curve and the offset on screen agree); from rest, on now.
+        if displayLink == nil { lastPagingFrameTime = nil }
+        let now = lastPagingFrameTime ?? CACurrentMediaTime()
         let start = collectionView.contentOffset.x
         let end = layout.contentOffsetCentered(index: newIndex).x
         var next = PagingAnimation(
@@ -1205,7 +1210,10 @@ final class PreviewCarouselViewController: UIViewController {
             return
         }
 
-        let now = CACurrentMediaTime()
+        // The time the frame will be shown, not when this callback ran: a late callback
+        // otherwise makes an uneven step.
+        let now = link.targetTimestamp
+        lastPagingFrameTime = now
         let t = min(1.0, max(0.0, (now - anim.startTime) / anim.duration))
         // The layout invalidates on bounds change, recomputing parallax per frame.
         collectionView.setContentOffset(CGPoint(x: pagingOffset(anim, at: now), y: 0), animated: false)

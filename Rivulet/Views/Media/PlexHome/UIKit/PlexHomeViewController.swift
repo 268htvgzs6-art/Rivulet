@@ -6797,6 +6797,10 @@ final class PlexHomeViewController: UIViewController {
     private var offsetTargetY: CGFloat = 0
     private var offsetVelocity: CGFloat = 0
     private var offsetLastTick: CFTimeInterval = 0
+    /// The unrounded offset the driver set last. UIScrollView pixel-rounds contentOffset, so stepping
+    /// from the read-back value can stall short of the target once a frame's move is under half a
+    /// pixel, with the link still running every frame.
+    private var offsetModelY: CGFloat = 0
 
     /// Follows `targetY` with the system's focus-scroll model. A scroll already
     /// in flight is retargeted and keeps its speed, so rapid moves never restart.
@@ -6805,6 +6809,7 @@ final class PlexHomeViewController: UIViewController {
         guard offsetLink == nil else { return }
         offsetVelocity = 0
         offsetLastTick = CACurrentMediaTime()
+        offsetModelY = collectionView.contentOffset.y
         // Weak proxy target: CADisplayLink retains its target, and a discarded instance with a live link
         // would leak with its observers still firing. The proxy invalidates once the VC dies.
         let link = CADisplayLink(target: DisplayLinkProxy(self), selector: #selector(DisplayLinkProxy.tick(_:)))
@@ -6827,12 +6832,19 @@ final class PlexHomeViewController: UIViewController {
     }
 
     @objc fileprivate func stepOffset(_ link: CADisplayLink) {
-        let now = CACurrentMediaTime()
-        let step = FocusScrollMotion.follow(from: collectionView.contentOffset.y, to: offsetTargetY,
+        // The time the frame will be shown, not when this callback happened to run: a late
+        // callback otherwise makes an uneven step (judder) even with no frame dropped.
+        let now = link.targetTimestamp
+        // Continue from the unrounded position while nothing else has moved the page (rounding is
+        // under a pixel); if something did (a snapshot shift, a restore), start from where it is.
+        let shown = collectionView.contentOffset.y
+        let from = abs(shown - offsetModelY) < 1 ? offsetModelY : shown
+        let step = FocusScrollMotion.follow(from: from, to: offsetTargetY,
                                             velocity: offsetVelocity, dt: now - offsetLastTick,
                                             viewport: collectionView.bounds.height)
         offsetLastTick = now
         offsetVelocity = step.velocity
+        offsetModelY = step.y
         collectionView.contentOffset = CGPoint(x: 0, y: step.y)
         if step.done {
             link.invalidate()
