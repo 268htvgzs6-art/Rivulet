@@ -2645,6 +2645,10 @@ final class UniversalPlayerViewModel: ObservableObject, WatchTogetherPlayer {
             .receive(on: DispatchQueue.main)
             .sink { [weak self] state in
                 guard let self else { return }
+                if case .failed = state, self.canFallBackToTranscodeAfterOriginalFailure {
+                    self.recoverFromOriginalFailure(reason: "aether_runtime_failure")
+                    return
+                }
                 if (state == .playing || state == .loading), player.isBuffering {
                     self.updatePlaybackState(.buffering)
                 } else {
@@ -3612,7 +3616,40 @@ final class UniversalPlayerViewModel: ObservableObject, WatchTogetherPlayer {
     /// A quality-chosen transcode (Auto's step, the menu) that fails, at start or mid-play, gives way to the
     /// file at the playhead and Auto stops stepping down for this item. A relay has no file route.
     private var canPlayOriginalAfterTranscodeFailure: Bool {
-        QualityDecision.playsOriginalAfterTranscodeFailure(plan: activeStreamPlan, isRelay: PlexRelay.isRelayURL(serverURL))
+        RouteFallback.playsOriginalAfterTranscodeFailure(
+            plan: activeStreamPlan, hasSwitched: hasSwitchedRoute, isRelay: PlexRelay.isRelayURL(serverURL))
+    }
+
+    /// The one route switch per item, spent by the first fallback in either direction.
+    private var hasSwitchedRoute: Bool { hasAttemptedRivuletHLSFallback || isAttemptingRivuletHLSFallback }
+
+    /// The file failed after it loaded (engine failure, the stall watchdog giving up): the server transcode
+    /// takes over at the playhead, once. Not for a stacked title or a trailer.
+    private var canFallBackToTranscodeAfterOriginalFailure: Bool {
+        aetherPlayer != nil && aetherLoadReturned && !isPlayingCinemaExtra && planHasHLSFallback(playbackPlan)
+            && RouteFallback.transcodesAfterOriginalFailure(
+                plan: activeStreamPlan, hasSwitched: hasSwitchedRoute, isLocal: false, isStacked: isStacked)
+    }
+
+    private func recoverFromOriginalFailure(reason: String) {
+        hasAttemptedRivuletHLSFallback = true
+        let time = playheadForReload
+        let tracks = currentPlexTrackIDs()
+        diagnostics.step("original_failed_playing_transcode", detail: reason)
+        SentryBridge.log(.warn, "Original failed mid-play, playing the transcode", attributes: [
+            "component": "playback", "reason": reason,
+        ])
+        cancelAetherStallWatchdog()
+        updatePlaybackState(.loading)
+        enqueueStreamWork { vm in
+            do {
+                try await vm.reloadTranscode(at: time, tracks: tracks)
+                vm.activePlayer_play()
+            } catch {
+                if isCancellationError(error) || Task.isCancelled { return }
+                vm.failPlayback(error, event: "midplay_fallback_failed", reason: reason, player: "avplayer")
+            }
+        }
     }
 
     private func playOriginalAfterTranscodeFailure(reason: String, at time: TimeInterval, tracks: TrackPicks) async throws {
@@ -3622,7 +3659,7 @@ final class UniversalPlayerViewModel: ObservableObject, WatchTogetherPlayer {
         ])
         stallTracker.stopStepping()
         activeStreamPlan = .original
-        try await reloadOriginal(at: time, tracks: tracks)
+        try await reloadOriginal(at: time, tracks: tracks, allowsHLSFallback: false)
     }
 
     /// The HLS item failed while playing; the file takes over at the playhead.
@@ -3696,7 +3733,7 @@ final class UniversalPlayerViewModel: ObservableObject, WatchTogetherPlayer {
     }
 
     /// Back to the untouched file at `time`, through the same start a fresh play uses.
-    private func reloadOriginal(at time: TimeInterval, tracks: TrackPicks) async throws {
+    private func reloadOriginal(at time: TimeInterval, tracks: TrackPicks, allowsHLSFallback: Bool = true) async throws {
         let plan: PlaybackPlan?
         if case .provider = source {
             plan = try await resolveProviderOriginal(at: time)
@@ -3720,7 +3757,8 @@ final class UniversalPlayerViewModel: ObservableObject, WatchTogetherPlayer {
         streamHeaders = headers ?? rivuletDirectPlayHeaders()
         rivuletFallbackURL = nil
         rivuletFallbackHeaders = [:]
-        hasAttemptedRivuletHLSFallback = false
+        // A transcode that just failed is not tried again as the file's fallback.
+        hasAttemptedRivuletHLSFallback = !allowsHLSFallback
         directPlayProbeStatus = nil
         // Engine ids differ from Plex ids, so the picks re-apply once the engine lists its tracks.
         initialAudioTrackId = tracks.audio
@@ -3994,7 +4032,9 @@ final class UniversalPlayerViewModel: ObservableObject, WatchTogetherPlayer {
     /// Why an HLS start failed: the server's reason when it gave one, else the generic wait failure.
     private func hlsStartFailure() -> PlayerError {
         var refusal = serverRefusal
-        if refusal == nil || refusal?.reason == .transcodeRefused, directPlayProbeStatus == 404 {
+        // A 404 on the file, or checkFiles marking it gone: both only explain a failure that already happened.
+        let fileGone = directPlayProbeStatus == 404 || metadata.Media?.first?.isMissing == true
+        if refusal == nil || refusal?.reason == .transcodeRefused, fileGone {
             refusal = ServerRefusal(reason: .fileMissing)
         }
         return refusal.map { .serverRefused($0.message) } ?? .loadFailed("HLS transcode session failed to start")
@@ -4326,6 +4366,10 @@ final class UniversalPlayerViewModel: ObservableObject, WatchTogetherPlayer {
                   player.isBuffering,
                   self.currentTime <= recoveryTime + 0.5 else { return }
 
+            if self.canFallBackToTranscodeAfterOriginalFailure {
+                self.recoverFromOriginalFailure(reason: "aether_stalled")
+                return
+            }
             let error = PlayerError.networkError("Aether playback stalled while waiting for buffered media")
             self.errorMessage = error.userFacingDescription
             self.updatePlaybackState(.failed(error))
