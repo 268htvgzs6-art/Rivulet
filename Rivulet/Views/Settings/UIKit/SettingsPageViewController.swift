@@ -39,6 +39,8 @@ final class SettingsPageViewController: UIViewController, SidebarTabReselecting 
     private var reorder: GrabReorderController!
     private var speechModelState: AnyCancellable?
     private var homeRowsUpdates: AnyCancellable?
+    /// A subtitle font download's progress, shown in the Subtitle Font row's value.
+    private var subtitleFontUpdates: AnyCancellable?
 
     init(page: SettingsPage) {
         self.page = page
@@ -117,6 +119,17 @@ final class SettingsPageViewController: UIViewController, SidebarTabReselecting 
                 .dropFirst()
                 .throttle(for: .milliseconds(250), scheduler: DispatchQueue.main, latest: true)
                 .sink { [weak self] _ in self?.refreshVisibleValues() }
+        }
+
+        // The Subtitle Font value follows a background font download; on the font list itself
+        // the rows' labels do (they are part of the rows, so the rows are rebuilt).
+        if page == .playback || page == .subtitleFontPicker {
+            subtitleFontUpdates = NotificationCenter.default.publisher(for: SubtitleAppearance.fontCatalogDidChange)
+                .throttle(for: .milliseconds(250), scheduler: DispatchQueue.main, latest: true)
+                .sink { [weak self] _ in
+                    guard let self else { return }
+                    page == .subtitleFontPicker ? reloadRows() : refreshVisibleValues()
+                }
         }
 
         // Home Rows: a favorites or playlist row just switched on can move once
@@ -248,6 +261,21 @@ final class SettingsPageViewController: UIViewController, SidebarTabReselecting 
         collectionView == nil ? super.preferredFocusEnvironments : [collectionView]
     }
 
+    /// The subtitle font list opens on the chosen font, already scrolled to it.
+    private var selectionPositioned = false
+    private var selectedOptionPath: IndexPath? {
+        guard page == .subtitleFontPicker else { return nil }
+        return rows.firstIndex(where: \.showsCheckmark).map { IndexPath(item: $0, section: 0) }
+    }
+
+    override func viewDidLayoutSubviews() {
+        super.viewDidLayoutSubviews()
+        guard !selectionPositioned, let path = selectedOptionPath, collectionView.bounds.height > 0 else { return }
+        selectionPositioned = true
+        collectionView.layoutIfNeeded()
+        collectionView.scrollToItem(at: path, at: .centeredVertically, animated: false)
+    }
+
     func reselectSidebarTab() {
         let first = rows.firstIndex(where: \.isFocusable).map { IndexPath(item: $0, section: 0) }
         SidebarReselection.returnToTop(in: collectionView, focusing: first)
@@ -282,6 +310,11 @@ extension SettingsPageViewController: UICollectionViewDataSource, UICollectionVi
 
     func collectionView(_ collectionView: UICollectionView, canFocusItemAt indexPath: IndexPath) -> Bool {
         rows[indexPath.item].isFocusable
+    }
+
+    /// The subtitle font list's first focus is the chosen font (nil elsewhere).
+    func indexPathForPreferredFocusedView(in collectionView: UICollectionView) -> IndexPath? {
+        selectedOptionPath
     }
 
     func collectionView(_ collectionView: UICollectionView, didSelectItemAt indexPath: IndexPath) {

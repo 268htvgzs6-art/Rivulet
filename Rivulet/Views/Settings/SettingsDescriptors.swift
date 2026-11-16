@@ -239,7 +239,7 @@ enum SettingsDescriptorStore {
         ),
         "subtitleFont": SettingDescriptor(
             icon: "textformat",
-            description: "The typeface for plain subtitles, from the Arabic fonts on this Apple TV. Also in the player's Subtitles menu. Styled ASS subtitles keep their own."
+            description: "The typeface for plain subtitles, also in the player's Subtitles menu. Fonts marked Download are fetched from Apple when chosen. Styled ASS subtitles keep their own."
         ),
         "subtitleBrightness": SettingDescriptor(
             icon: "sun.min",

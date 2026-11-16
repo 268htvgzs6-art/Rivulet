@@ -15015,6 +15015,10 @@
         }
       }
     },
+    "%@ (Download)" : {},
+    "%@ (Downloading %lld%%)" : {},
+    "%@ (Unavailable)" : {},
+    "%@ (Waiting…)" : {},
     "%@ + %lld more" : {
       "localizations" : {
         "de" : {
