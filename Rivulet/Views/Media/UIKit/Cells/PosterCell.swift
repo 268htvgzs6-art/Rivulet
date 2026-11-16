@@ -192,8 +192,22 @@ final class PosterCell: UICollectionViewCell {
 
     private var tileBlankArtwork: UIImage { tile.art == MediaRowMetrics.music.art ? Self.blankMusicArtwork : Self.blankArtwork }
 
-    /// The poster corner, drawn into the artwork (`RoundedPoster`).
+    /// The poster corner: drawn into the artwork (`RoundedPoster`), or clipped on solid art.
     private let cornerRadius = RoundedPoster.cornerRadius
+
+    /// Solid artwork, with no alpha channel, so TVPosterView skips its alpha scan of each image.
+    /// tvOS 27 only: its focused poster already rounds to the 20 pt continuous corner, and at rest
+    /// the image view clips to the same corner. tvOS 26's system corner is about 6 pt, so it keeps
+    /// the corner drawn into the artwork (#581).
+    static let solidArt: Bool = { if #available(tvOS 27, *) { return true } else { return false } }()
+
+    /// Off from focus until the unfocus animation ends: the clip would cut off TVPosterView's focus shadow.
+    private func setRestingClip(_ on: Bool) {
+        guard Self.solidArt else { return }
+        let layer = posterView.imageView.layer
+        if layer.masksToBounds != on { layer.masksToBounds = on }
+    }
+
     /// The tile the cell shows; the host view is TVUIKit's focused size (`hostSize`).
     private var tile = MediaRowMetrics.poster
 
@@ -221,6 +235,11 @@ final class PosterCell: UICollectionViewCell {
         posterView.translatesAutoresizingMaskIntoConstraints = false
         posterView.image = Self.blankArtwork
         contentView.addSubview(posterView)
+        if Self.solidArt {
+            posterView.imageView.layer.cornerRadius = cornerRadius
+            posterView.imageView.layer.cornerCurve = .continuous
+            posterView.imageView.layer.masksToBounds = true
+        }
 
         // Overlay container clipped to the same rounded rect as the poster.
         overlayContainer.translatesAutoresizingMaskIntoConstraints = false
@@ -306,6 +325,7 @@ final class PosterCell: UICollectionViewCell {
         let longSide = max(artSize.width, artSize.height)
         let scale = longSide > 0 ? 1 + tile.growth.height / longSide : 1.1
         barFocusedState = nowFocused
+        if nowFocused { setRestingClip(false) }   // TVPosterView's focused look rounds itself
         coordinator.addCoordinatedAnimations({
             self.posterView.transform = nowFocused ? self.tile.focusScale : .identity
             self.progressInfoBar?.setFocused(nowFocused)
@@ -320,8 +340,8 @@ final class PosterCell: UICollectionViewCell {
     }
 
     /// Clears a focused look TVPosterView left behind: its unfocus animation sometimes never runs
-    /// (focus left into a presented carousel), stranding the scale and parallax. No-op while focused,
-    /// since the completion can fire after focus has returned.
+    /// (focus left into a presented carousel), stranding the scale and parallax. Also puts back the
+    /// resting corner clip. No-op while focused, since the completion can fire after focus has returned.
     func resetStaleFocusAppearance() {
         guard !isFocused else { return }
         func clear(_ v: UIView) {
@@ -332,6 +352,7 @@ final class PosterCell: UICollectionViewCell {
         }
         clear(posterView)
         overlayContainer.transform = .identity
+        setRestingClip(true)
     }
 
     // MARK: - Configure
@@ -468,7 +489,7 @@ final class PosterCell: UICollectionViewCell {
         currentURL = url
         // Memory hit paints in this pass, so a tile realized for a carousel
         // exit has artwork to fly to.
-        let shape = RoundedPoster.Shape(tile: tile, scale: traitCollection.displayScale)
+        let shape = RoundedPoster.Shape(tile: tile, scale: traitCollection.displayScale, opaque: Self.solidArt)
         if let cached = RoundedPoster.cached(for: url, shape: shape) {
             posterView.image = cached
             hasArtwork = true

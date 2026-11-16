@@ -4,6 +4,8 @@
 // Poster artwork with the Apple TV app's 20 pt corner drawn into the image (#581).
 // TVPosterView ignores a corner radius set on it and clips to the system corner,
 // which is 20 pt on tvOS 27 but about 6 pt on tvOS 26; the Apple TV app is 20 pt on both.
+// An opaque `Shape` draws solid artwork with no alpha channel and no corner instead, for a
+// cell that clips the corner itself (`PosterCell.solidArt`).
 
 import UIKit
 
@@ -44,21 +46,29 @@ nonisolated enum RoundedPoster {
         let size: CGSize
         let radius: CGFloat
         let scale: CGFloat
+        /// A bitmap with no alpha channel and square corners. TVPosterView scans the alpha of every
+        /// image it is given on the main thread (about 1.2 ms a poster in the simulator); an image
+        /// without an alpha channel skips the scan (about 0.06 ms).
+        let opaque: Bool
 
         /// Fills the host size (the focused size TVPosterView scales the image to), so the
         /// corner reads `cornerRadius` at rest and grows with the poster on focus.
-        @MainActor init(tile: MediaRowMetrics.Tile, scale: CGFloat) {
+        @MainActor init(tile: MediaRowMetrics.Tile, scale: CGFloat, opaque: Bool = false) {
             size = tile.hostSize
             radius = RoundedPoster.cornerRadius * tile.hostSize.width / tile.art.width
             self.scale = scale
+            self.opaque = opaque
         }
 
         fileprivate func key(_ url: URL) -> NSString {
-            "\(Int(size.width * scale))x\(Int(size.height * scale))#\(url.absoluteString)" as NSString
+            "\(Int(size.width * scale))x\(Int(size.height * scale))\(opaque ? "o" : "")#\(url.absoluteString)" as NSString
         }
     }
 
     static func render(_ source: CGImage, shape: Shape) -> UIImage {
+        // Sources with their own transparency (PNG/WebP from Jellyfin or Emby, unsized originals) keep
+        // baked corners: drawn without alpha, their see-through parts would turn black.
+        if shape.opaque, !source.hasAlpha, let solid = renderOpaque(source, shape: shape) { return solid }
         let size = shape.size, radius = shape.radius
         return UIGraphicsImageRenderer(size: size, format: .layeredArtwork(scale: shape.scale)).image { context in
             UIBezierPath(roundedRect: CGRect(origin: .zero, size: size), cornerRadius: radius).addClip()
@@ -69,6 +79,22 @@ nonisolated enum RoundedPoster {
                                                      y: (size.height - drawSize.height) / 2,
                                                      width: drawSize.width, height: drawSize.height))
         }
+    }
+
+    /// The same aspect-fill as `render`, into a bitmap with no alpha channel and no corner.
+    private static func renderOpaque(_ source: CGImage, shape: Shape) -> UIImage? {
+        let pw = Int((shape.size.width * shape.scale).rounded()), ph = Int((shape.size.height * shape.scale).rounded())
+        guard pw > 0, ph > 0,
+              let ctx = CGContext(data: nil, width: pw, height: ph, bitsPerComponent: 8, bytesPerRow: 0,
+                                  space: CGColorSpace(name: CGColorSpace.sRGB) ?? CGColorSpaceCreateDeviceRGB(),
+                                  bitmapInfo: CGImageAlphaInfo.noneSkipFirst.rawValue | CGBitmapInfo.byteOrder32Little.rawValue)
+        else { return nil }
+        let srcW = CGFloat(source.width), srcH = CGFloat(source.height)
+        let fill = max(CGFloat(pw) / srcW, CGFloat(ph) / srcH)
+        let drawW = srcW * fill, drawH = srcH * fill
+        ctx.draw(source, in: CGRect(x: (CGFloat(pw) - drawW) / 2, y: (CGFloat(ph) - drawH) / 2, width: drawW, height: drawH))
+        guard let image = ctx.makeImage() else { return nil }
+        return UIImage(cgImage: image, scale: shape.scale, orientation: .up)
     }
 
     private static func store(_ image: UIImage, _ key: NSString) -> UIImage {
@@ -87,5 +113,14 @@ extension UIGraphicsImageRendererFormat {
         if let scale { format.scale = scale }
         format.preferredRange = .standard
         return format
+    }
+}
+
+private extension CGImage {
+    nonisolated var hasAlpha: Bool {
+        switch alphaInfo {
+        case .none, .noneSkipFirst, .noneSkipLast: return false
+        default: return true
+        }
     }
 }

@@ -434,6 +434,8 @@ final class ShelfRowCell: UICollectionViewCell {
     }
 
     static func clearFocusAppearance(in view: UIView) {
+        // A poster on solid art also needs its resting corner clip back.
+        (view as? PosterCell)?.resetStaleFocusAppearance()
         view.layer.removeAllAnimations()
         if !view.transform.isIdentity { view.transform = .identity }
         if !CATransform3DIsIdentity(view.layer.transform) { view.layer.transform = CATransform3DIdentity }
