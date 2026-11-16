@@ -2106,6 +2106,8 @@ final class PlexHomeViewController: UIViewController {
             Task { await refreshPageAfterWatchStateChange() }
         }
         refreshYearInReview()
+        posterPageAppeared()
+        schedulePosterPrefetch()
         if !isDrillInPage { HalloweenBats.showIfHalloween(in: view) }
         if let window = view.window {
             MenuPressInterceptor.install(in: window)
@@ -2127,6 +2129,7 @@ final class PlexHomeViewController: UIViewController {
         // Only a real dismissal. A carousel presented over the collection page
         // (.overFullScreen) never makes it disappear at all.
         if isBeingDismissed { onDismiss?() }
+        posterPageDisappeared()
     }
 
     /// Set when a watch-state change arrived while this page was off screen.
@@ -3912,6 +3915,7 @@ final class PlexHomeViewController: UIViewController {
         let computeMs = Int((ProcessInfo.processInfo.systemUptime - computeStart) * 1000)
         if computeMs > 200 { StartupTimer.mark("  computeSections \(computeMs)ms") }
         sectionsSnapshot = sections
+        schedulePosterPrefetch()
 
         let applyStart = ProcessInfo.processInfo.systemUptime
         defer {
@@ -5248,6 +5252,127 @@ final class PlexHomeViewController: UIViewController {
         let token = authManager.selectedServerToken ?? ""
         let providerID = MediaProviderRegistry.shared.plexProvider?.id ?? "plex:\(serverURL)"
         return { PlexMediaMapper.item($0, providerID: providerID, serverURL: serverURL, authToken: token) }
+    }
+
+    // MARK: - Background poster download (PosterPrefetcher)
+
+    private var posterPrefetchWork: DispatchWorkItem?
+    /// The window this page last appeared in: once a full-screen presentation has taken the page's view
+    /// out of it, the window is how viewDidDisappear still finds what was presented.
+    private weak var posterWindow: UIWindow?
+
+    /// Home and library pages are the browse pages PosterPrefetcher serves.
+    private var isPosterBrowsePage: Bool {
+        switch mode {
+        case .home, .library: return true
+        default: return false
+        }
+    }
+
+    private func posterPageAppeared() {
+        guard isPosterBrowsePage else { return }
+        posterWindow = view.window
+        PosterPrefetcher.browsePageAppeared(self)
+    }
+
+    /// Covered (the player, a full-screen page): pause, keeping the library walk. Left: stop the walk
+    /// too, keeping its position for the next visit.
+    private func posterPageDisappeared() {
+        posterPrefetchWork?.cancel()
+        guard isPosterBrowsePage else { return }
+        PosterPrefetcher.browsePageDisappeared(self)
+        if posterPageWasLeft, let id = posterWalkID { PosterPrefetcher.libraryOffScreen(id: id) }
+    }
+
+    /// In viewDidDisappear: true when the page was dismissed, taken out of its container or its tab was
+    /// switched away; false when something presented over it only covers it.
+    private var posterPageWasLeft: Bool {
+        var node: UIViewController? = self
+        while let vc = node {
+            if vc.isBeingDismissed || vc.isMovingFromParent { return true }
+            node = vc.parent
+        }
+        node = self
+        while let vc = node {
+            if let shown = vc.presentedViewController, !shown.isBeingDismissed { return false }
+            node = vc.parent
+        }
+        if let shown = posterWindow?.rootViewController?.presentedViewController, !shown.isBeingDismissed {
+            return false
+        }
+        // Nothing over it: the shell swapped tabs.
+        return true
+    }
+
+    /// Hands this page's poster rows (and, on a library page, its whole item list) to PosterPrefetcher
+    /// a second after the snapshot settles. Home and library pages only, and only while on screen.
+    private func schedulePosterPrefetch() {
+        guard isPosterBrowsePage else { return }
+        posterPrefetchWork?.cancel()
+        let work = DispatchWorkItem { [weak self] in self?.sendPosterPrefetch() }
+        posterPrefetchWork = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1, execute: work)
+    }
+
+    private func sendPosterPrefetch() {
+        guard isViewLoaded, view.window != nil else { return }
+        // The shelves PosterCell draws, top to bottom, every loaded item (not just the visible ones).
+        let rows: [[MediaItem]] = sectionsSnapshot.compactMap { section -> [MediaItem]? in
+            switch section.kind {
+            case .recentlyAdded, .recommendations: return section.items.isEmpty ? nil : section.items
+            default: return nil
+            }
+        }
+        switch mode {
+        case .home:
+            let watchlist = sectionsSnapshot.first(where: { $0.kind == .watchlist })?.watchlistItems ?? []
+            PosterPrefetcher.homeRowsChanged(rows, watchlist: watchlist)
+        case .library:
+            guard let walk = posterWalk() else { return }
+            PosterPrefetcher.libraryOnScreen(id: walk.id, order: "\(gridSort)", rows: rows, fetch: walk.fetch)
+        default:
+            break
+        }
+    }
+
+    /// Names this library page's walk; nil off a library page.
+    private var posterWalkID: String? {
+        guard case .library(let key, _) = mode else { return nil }
+        if let library = providerLibrary { return "\(library.providerID)#\(library.id)" }
+        return "plex#\(key)"
+    }
+
+    /// Pages through the whole library, in the grid's sort and unfiltered, mapped exactly as
+    /// `loadGridPage` maps its pages (provider pages arrive mapped; Plex pages go through
+    /// `mediaItemMapper`), so each poster URL `PosterCell.posterURL(for:)` derives is the grid tile's.
+    private func posterWalk() -> (id: String, fetch: PosterPrefetcher.PageFetch)? {
+        guard case .library(let key, _) = mode, let id = posterWalkID else { return nil }
+        if let library = providerLibrary {
+            let providerID = library.providerID
+            let sort = Self.providerSort(gridSort)
+            let fetch: PosterPrefetcher.PageFetch = { start, size in
+                guard let provider = MediaProviderRegistry.shared.provider(for: providerID) else { throw CancellationError() }
+                let page = try await provider.items(in: library, sort: sort, filter: LibraryFilter.none,
+                                                    page: Page(offset: start, limit: size))
+                return (page.items, page.total)
+            }
+            return (id, fetch)
+        }
+        guard let serverURL = authManager.selectedServerURL,
+              let token = authManager.selectedServerToken else { return nil }
+        let sort = gridSort.apiParameter
+        let fetch: PosterPrefetcher.PageFetch = { [weak self] start, size in
+            // The page is gone, or the server or profile changed: the walk stops.
+            guard let self, self.authManager.selectedServerURL == serverURL,
+                  self.authManager.selectedServerToken == token else { throw CancellationError() }
+            let map = self.mediaItemMapper()
+            let result = try await PlexNetworkManager.shared.getLibraryItemsWithTotal(
+                serverURL: serverURL, authToken: token, sectionId: key, start: start, size: size,
+                sort: sort, followCollectionMode: true
+            )
+            return (result.items.map(map), result.totalSize)
+        }
+        return (id, fetch)
     }
 
     /// `/hubs` names these `home.movies.recent`, the library pages `movie.recentlyadded.1`.
@@ -6850,10 +6975,12 @@ final class PlexHomeViewController: UIViewController {
         init(_ owner: PlexHomeViewController) { self.owner = owner }
         @objc func tick(_ link: CADisplayLink) {
             guard let owner else { link.invalidate(); return }
+            PosterPrefetcher.noteMotion()   // background poster downloads wait while the page scrolls
             owner.stepOffset(link)
         }
         @objc func fastTick(_ link: CADisplayLink) {
             guard let owner else { link.invalidate(); return }
+            PosterPrefetcher.noteMotion()
             owner.stepFastScroll(link)
         }
     }

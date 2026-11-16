@@ -372,9 +372,7 @@ final class PosterCell: UICollectionViewCell {
     func configure(item: MediaItem) {
         sourceBadge?.text = nil
         setSquare(item.isMusic == true)
-        // Episodes and seasons show the show's poster, matching the Plex path.
-        let url = item.grandparentArtwork?.poster
-            ?? (item.kind == .season ? item.parentArtwork?.poster : nil) ?? item.artwork.poster
+        let url = Self.posterURL(for: item)
         failureTitleText = item.title
         setEdition(item.editionTitle)
         loadImage(from: url, failureKind: item.kind)
@@ -594,6 +592,14 @@ final class PosterCell: UICollectionViewCell {
         default:       name = "photo"
         }
         return TileSymbolIcon.image(name)
+    }
+
+    /// The poster a MediaItem tile shows. PosterPrefetcher downloads through this too, so it fetches
+    /// exactly the URL (and so the cache file) the tile will ask for. Episodes and seasons show the
+    /// show's poster, matching the Plex path.
+    nonisolated static func posterURL(for item: MediaItem) -> URL? {
+        item.grandparentArtwork?.poster
+            ?? (item.kind == .season ? item.parentArtwork?.poster : nil) ?? item.artwork.poster
     }
 
     private func posterURL(for item: PlexMetadata) -> URL? {
