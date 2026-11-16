@@ -18123,27 +18123,8 @@
         }
       }
     },
-    "Selecting a movie or show opens its full details at once, skipping the preview card. Off keeps the preview, where you can browse the row." : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Wenn du einen Film oder eine Serie auswählst, öffnen sich sofort alle Details, ohne die Vorschaukarte. „Aus“ behält die Vorschau, in der du die Reihe durchblättern kannst."
-          }
-        },
-        "el" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Η επιλογή ταινίας ή σειράς ανοίγει κατευθείαν τις πλήρεις λεπτομέρειες, παρακάμπτοντας την κάρτα προεπισκόπησης. Ανενεργό, διατηρεί την προεπισκόπηση για περιήγηση."
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Sélectionner un film ou une série ouvre aussitôt sa fiche, sans aperçu. Désactivé garde l’aperçu, où vous pouvez parcourir la rangée."
-          }
-        }
-      }
+    "Selecting a movie or show opens its full details at once, skipping the preview card. Off keeps the preview, where you can browse the row, except in a library." : {
+
     },
     "Send Diagnostics" : {
       "localizations" : {
