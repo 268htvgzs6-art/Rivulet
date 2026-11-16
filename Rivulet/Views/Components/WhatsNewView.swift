@@ -155,6 +155,25 @@ struct WhatsNewView: View {
     // MARK: - Changelog Data
 
     static let changelogs: [(version: String, features: [String])] = [
+        ("1.4 (130)", [
+            "> This is a community fork of Rivulet 1.3.1 (129) with the changes below. It is not an official Rivulet release.",
+            "Home and its rows scroll on a smooth spring that lands softly, and repeated presses build momentum",
+            "Detail pages and the music queue settle faster",
+            "Smoother browsing: posters download in the background and Home builds a page's rows when it opens",
+            "Home no longer draws a full-screen blur behind the rows",
+            "Libraries: Up from any column reaches Shuffle, Sort and View",
+            "Libraries: a poster opens straight to its full details",
+            "Libraries show one Recently Added row above the grid",
+            "IMDb scores show IMDb's yellow badge",
+            "No Starring line beside the action buttons",
+            "Each episode is one card, and Select plays it",
+            "A chevron under the preview card shows that Down opens the full details",
+            "Subtitles: choose an Arabic font, including fonts Apple can download, and dim the brightness",
+            "iCloud Sync no longer crashes at launch in a build signed without iCloud",
+            "Swipe to scrub starts only on a clearly sideways swipe, and the playhead follows your finger",
+            "Player: Up from a pane's tabs closes it, and Down with the controls up moves to the tabs",
+            "Skip pill: Up and Down land in the controls in one move",
+        ]),
         ("1.3.1 (129)", [
             "New: Watch Together. Start or join a room and watch in sync with friends",
             "Subtitles follow your Subtitles setting, not a track Plex has selected",

@@ -1,3 +1,34 @@
+## About this fork (1.4)
+
+This is a community fork of [l984-451/Rivulet](https://github.com/l984-451/Rivulet), based on Rivulet 1.3.1 (129). It is not affiliated with or endorsed by Rivulet's author, and the upstream repository remains the official app. Each change is its own commit, so it can be offered upstream on its own.
+
+Changes in 1.4:
+
+- Home and shelf rows scroll on a spring timed to the displayed frame, and Home's scroll stops when it lands
+- Home's vertical scroll lands softly, with momentum on repeated presses
+- Detail pages and the music queue settle in 0.35 s
+- Posters do less work per tile while scrolling, with solid artwork on tvOS 27
+- Less main-thread work while browsing
+- Home and library posters download in the background
+- Library: Up from any grid column reaches the header buttons
+- Library: a poster opens straight to its full-screen detail
+- Library: one Recently Added row above the grid
+- Home builds a page's rows when it opens, not while scrolling
+- Home has no full-screen blur behind the rows
+- Detail: IMDb scores show IMDb's yellow badge
+- Detail: no Starring line beside the action buttons
+- Detail: one card per episode, and Select plays it
+- Preview card: a chevron hints that Down opens the full details
+- Subtitles: Subtitle Brightness, a font choice from the Apple TV's Arabic fonts, and Apple's downloadable Arabic fonts
+- iCloud Sync: no launch crash in a build without the iCloud entitlement
+- Swipe to scrub starts only on a clearly sideways swipe, and the playhead follows the finger
+- Player: Up from a pane's tabs closes the pane, and Down with the controls up moves to the tabs
+- Skip pill: Up and Down land in the controls in one move
+
+Same license as upstream: [PolyForm Noncommercial 1.0.0](LICENSE). The fork carries no signing changes and no optional engine build options; build it and sign it with your own Apple ID, as described under Building below.
+
+---
+
 <div align="center">
 
 <img src="Branding/logo_glow_transparent.png" alt="Rivulet" width="220">
