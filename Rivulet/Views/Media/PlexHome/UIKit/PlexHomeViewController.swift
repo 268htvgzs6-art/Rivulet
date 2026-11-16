@@ -571,6 +571,18 @@ final class PlexHomeViewController: UIViewController {
     private var collectionView: UICollectionView!
     private var dataSource: UICollectionViewDiffableDataSource<HomeSectionID, HomeItemID>!
 
+    /// How far the collection reaches below the screen, cancelled by the same bottom content
+    /// inset. A page's rows are then built when it opens (this covers about six Home rows)
+    /// instead of one by one as each scrolls on screen. 0 on Search, whose content swaps
+    /// wholesale under the system search chrome.
+    private var rowOverscan: CGFloat {
+        if case .search = mode { return 0 }
+        return 3600
+    }
+    /// The collection's on-screen height. Everything that means "the visible area" uses this,
+    /// never `collectionView.bounds.height`, which includes `rowOverscan`. 0 before the first layout.
+    private var viewportHeight: CGFloat { max(0, collectionView.bounds.height - rowOverscan) }
+
     /// Leading-edge guide that stops fast Left swipes escaping to the sidebar mid-row. `didUpdateFocus`
     /// points it at `item - 1`, or leaves it empty at item 0 so focus passes to the sidebar.
     private var leftEdgeFocusGuide: UIFocusGuide!
@@ -1809,8 +1821,8 @@ final class PlexHomeViewController: UIViewController {
         offsetLink = nil
         // Centre the row, which is where the focus-scroll puts it anyway, so
         // landing on it afterwards does not move the grid a second time.
-        let target = attrs.frame.midY - collectionView.bounds.height / 2
-        let maxOffset = max(0, collectionView.contentSize.height - collectionView.bounds.height)
+        let target = attrs.frame.midY - viewportHeight / 2
+        let maxOffset = max(0, collectionView.contentSize.height - viewportHeight)
         collectionView.contentOffset = CGPoint(x: 0, y: max(-collectionView.adjustedContentInset.top, min(target, maxOffset)))
         collectionView.layoutIfNeeded()
         pendingGridFocusItem = entry.offset
@@ -2910,10 +2922,14 @@ final class PlexHomeViewController: UIViewController {
         collectionView.register(SearchRecentsCell.self, forCellWithReuseIdentifier: SearchRecentsCell.reuseID)
         collectionView.register(SearchStateCell.self, forCellWithReuseIdentifier: SearchStateCell.reuseID)
 
+        // The collection reaches `rowOverscan` below the screen and the same bottom inset cancels
+        // it, so the last resting offset is unchanged. Insets are not adjusted (`.never` above),
+        // so the part outside the window adds no safe-area inset.
+        collectionView.contentInset.bottom = rowOverscan
         view.addSubview(collectionView)
         NSLayoutConstraint.activate([
             collectionView.topAnchor.constraint(equalTo: view.topAnchor),
-            collectionView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+            collectionView.bottomAnchor.constraint(equalTo: view.bottomAnchor, constant: rowOverscan),
             collectionView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             collectionView.trailingAnchor.constraint(equalTo: view.trailingAnchor)
         ])
@@ -6685,9 +6701,9 @@ final class PlexHomeViewController: UIViewController {
             else { return nil }
             // Search's top inset is its collapsed search chrome: centre in the space below it.
             let chrome: CGFloat = if case .search = mode { collectionView.adjustedContentInset.top } else { 0 }
-            target = attrs.frame.midY - (collectionView.bounds.height + chrome) / 2
+            target = attrs.frame.midY - (viewportHeight + chrome) / 2
         }
-        let maxOffset = max(0, collectionView.contentSize.height - collectionView.bounds.height)
+        let maxOffset = max(0, collectionView.contentSize.height - viewportHeight)
         return max(-collectionView.adjustedContentInset.top, min(target, maxOffset))
     }
 
@@ -6705,9 +6721,9 @@ final class PlexHomeViewController: UIViewController {
     private func gridRestingOffsetY(for indexPath: IndexPath, from: CGFloat) -> CGFloat? {
         guard let attrs = collectionView.layoutAttributesForItem(at: indexPath) else { return nil }
         let target = FocusScrollMotion.minimalOffset(revealing: attrs.frame, from: from,
-                                                     height: collectionView.bounds.height)
+                                                     height: viewportHeight)
         let top = -collectionView.adjustedContentInset.top
-        let maxOffset = max(top, collectionView.contentSize.height - collectionView.bounds.height)
+        let maxOffset = max(top, collectionView.contentSize.height - viewportHeight)
         return max(top, min(target, maxOffset))
     }
 
@@ -6728,7 +6744,7 @@ final class PlexHomeViewController: UIViewController {
         // be on screen at the moment the engine resolves preferred focus.
         if let attrs = collectionView.layoutAttributesForItem(at: IndexPath(item: 0, section: target)) {
             let insetTop = collectionView.adjustedContentInset.top
-            let maxOffset = max(-insetTop, collectionView.contentSize.height - collectionView.bounds.height)
+            let maxOffset = max(-insetTop, collectionView.contentSize.height - viewportHeight)
             let clamped = max(-insetTop, min(attrs.frame.minY - insetTop, maxOffset))
             if abs(collectionView.contentOffset.y - clamped) > 1 {
                 offsetLink?.invalidate()
@@ -6774,11 +6790,11 @@ final class PlexHomeViewController: UIViewController {
         var target = offset
         if frameInContent.minY < offset + insetTop {
             target = frameInContent.minY - insetTop
-        } else if frameInContent.maxY > offset + collectionView.bounds.height {
-            target = frameInContent.maxY - collectionView.bounds.height
+        } else if frameInContent.maxY > offset + viewportHeight {
+            target = frameInContent.maxY - viewportHeight
         }
         let top = -insetTop
-        let maxOffset = max(top, collectionView.contentSize.height - collectionView.bounds.height)
+        let maxOffset = max(top, collectionView.contentSize.height - viewportHeight)
         let clamped = max(top, min(target, maxOffset))
         guard abs(offset - clamped) > 1 else { return }
         animateContentOffset(toY: clamped)
@@ -6830,7 +6846,7 @@ final class PlexHomeViewController: UIViewController {
         let now = CACurrentMediaTime()
         let step = FocusScrollMotion.follow(from: collectionView.contentOffset.y, to: offsetTargetY,
                                             velocity: offsetVelocity, dt: now - offsetLastTick,
-                                            viewport: collectionView.bounds.height)
+                                            viewport: viewportHeight)
         offsetLastTick = now
         offsetVelocity = step.velocity
         collectionView.contentOffset = CGPoint(x: 0, y: step.y)
@@ -6874,7 +6890,7 @@ final class PlexHomeViewController: UIViewController {
         let velocity = min(9000.0, 1500.0 + 3000.0 * (now - fastScrollStart))
         let direction: CGFloat = heldArrow == .upArrow ? -1 : 1
         let insetTop = collectionView.adjustedContentInset.top
-        let maxOffset = max(-insetTop, collectionView.contentSize.height - collectionView.bounds.height)
+        let maxOffset = max(-insetTop, collectionView.contentSize.height - viewportHeight)
         let y = max(-insetTop, min(maxOffset, collectionView.contentOffset.y + direction * CGFloat(velocity * dt)))
         collectionView.contentOffset = CGPoint(x: 0, y: y)
         if y <= -insetTop || y >= maxOffset { stopFastScroll() }
@@ -6885,7 +6901,7 @@ final class PlexHomeViewController: UIViewController {
     private func centerGridIndexPath() -> IndexPath? {
         guard let grid = gridSectionIndex else { return nil }
         collectionView.layoutIfNeeded()
-        let centerY = collectionView.contentOffset.y + collectionView.bounds.height / 2
+        let centerY = collectionView.contentOffset.y + viewportHeight / 2
         return collectionView.indexPathsForVisibleItems
             .filter { $0.section == grid }
             .min { a, b in
