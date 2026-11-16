@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 // Copyright (C) 2025-2026 Bain Gurley
 
-// Subtitle Brightness.
+// Subtitle Font and Subtitle Brightness.
 
 import CoreGraphics
 import XCTest
@@ -79,5 +79,47 @@ final class SubtitleAppearanceTests: XCTestCase {
         XCTAssertEqual(SubtitleAppearance.dimASSColor(0xFFFFFF00, by: 0.4), 0x66666600)
         XCTAssertEqual(SubtitleAppearance.dimASSColor(0xFF0000_80, by: 0.5), 0x80000080)
         XCTAssertEqual(SubtitleAppearance.dimASSColor(0x12345678, by: 1), 0x12345678)
+    }
+
+    // MARK: Font
+
+    func test_resolvedFamily_unsetOrEmpty_isSystem() {
+        XCTAssertNil(SubtitleAppearance.resolvedFamily(nil, load: { $0 }))
+        XCTAssertNil(SubtitleAppearance.resolvedFamily("", load: { $0 }))
+        XCTAssertNil(SubtitleAppearance.resolvedFamily("  ", load: { $0 }))
+    }
+
+    func test_resolvedFamily_missingFont_fallsBackToSystem() {
+        XCTAssertNil(SubtitleAppearance.resolvedFamily("Diwan Kufi", load: { _ in nil }))
+    }
+
+    func test_resolvedFamily_findsHiddenSystemSpelling() {
+        let installed = [".SF Arabic"]
+        let load: (String) -> String? = { name in installed.first { $0 == name } }
+        XCTAssertEqual(SubtitleAppearance.resolvedFamily("SF Arabic", load: load), ".SF Arabic")
+        XCTAssertEqual(SubtitleAppearance.resolvedFamily(".SF Arabic", load: load), ".SF Arabic")
+    }
+
+    func test_normalized_ignoresCaseSpacesAndHiddenDot() {
+        XCTAssertEqual(SubtitleAppearance.normalized("Al Bayan"), SubtitleAppearance.normalized("albayan"))
+        XCTAssertEqual(SubtitleAppearance.normalized(".SF Arabic"), SubtitleAppearance.normalized("SF Arabic"))
+        XCTAssertEqual(SubtitleAppearance.displayName(".SF Arabic"), "SF Arabic")
+    }
+
+    /// Geeza Pro ships on every tvOS; an unknown family gives no descriptor (System).
+    func test_fontDescriptor_resolvesInstalledFamily_andNotAMissingOne() {
+        XCTAssertNotNil(SubtitleAppearance.fontDescriptor(forFamily: "Geeza Pro"))
+        XCTAssertNil(SubtitleAppearance.fontDescriptor(forFamily: "No Such Font Family"))
+        XCTAssertNil(SubtitleAppearance.fontDescriptor(forFamily: nil))
+    }
+
+    /// The list holds only families that load here, each once.
+    func test_availableArabicFamilies_loadHere_withoutDuplicates() {
+        let families = SubtitleAppearance.availableArabicFamilies
+        XCTAssertTrue(families.contains { SubtitleAppearance.normalized($0) == "geezapro" })
+        XCTAssertEqual(Set(families.map(SubtitleAppearance.normalized)).count, families.count)
+        for family in families {
+            XCTAssertNotNil(SubtitleAppearance.resolvedFamily(family), family)
+        }
     }
 }
