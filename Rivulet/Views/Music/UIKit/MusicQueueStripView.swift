@@ -136,7 +136,7 @@ final class MusicQueueStripView: UIView, UICollectionViewDataSource, UICollectio
     private var animTargetX: CGFloat = 0
     private var animStartTime: CFTimeInterval = 0
 
-    /// Rests the focused card, or the playing one, at x 698. Same driven settle as the Home shelves.
+    /// Rests the focused card, or the playing one, at x 698, on the shared eased settle.
     private func settle(animated: Bool) {
         let target = CGFloat(focusedIndex ?? currentIndex) * Self.pitch
         offsetLink?.invalidate()
