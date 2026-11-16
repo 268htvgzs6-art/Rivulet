@@ -11,6 +11,7 @@
 import UIKit
 import Foundation
 import ImageIO
+import os
 
 /// Decode size for a cached image; the disk keeps the bytes as downloaded. tvOS renders at 1080p
 /// and upscales to 4K, so 3840 px (2x the screen width) is the ceiling; `thumb` is 2x a ~444 pt poster.
@@ -62,7 +63,6 @@ actor ImageCacheManager: NSObject {
 
     // MARK: - Configuration
 
-    private let cacheDirectoryName = "PlexImageCache"
     private let metadataFileName = "image_cache_metadata.json"
     private let maxMemoryCacheCount = 100
     private let maxKeyCacheCount = 2048
@@ -97,6 +97,37 @@ actor ImageCacheManager: NSObject {
         return newSession
     }
 
+    /// PosterPrefetcher's downloads: configured like `session` (same delegate, so the same server
+    /// trust) but with one connection per host, so a background poster never holds a connection
+    /// an on-screen tile is waiting for.
+    private var _prefetchSession: URLSession?
+    private var prefetchSession: URLSession {
+        if let existing = _prefetchSession { return existing }
+        let config = URLSessionConfiguration.default
+        config.urlCache = nil
+        config.timeoutIntervalForRequest = 30
+        config.timeoutIntervalForResource = 60
+        config.httpMaximumConnectionsPerHost = 1
+        let newSession = URLSession(configuration: config, delegate: self, delegateQueue: nil)
+        _prefetchSession = newSession
+        return newSession
+    }
+
+    private func downloadSession(prefetch: Bool) -> URLSession {
+        prefetch ? prefetchSession : session
+    }
+
+    // MARK: - On-screen loads in flight
+
+    /// Tile loads in `fetchOriginalData`: on the network, or waiting on a shared download.
+    /// PosterPrefetcher starts nothing new while this is above 0.
+    nonisolated private static let foregroundFetches = OSAllocatedUnfairLock<Int>(initialState: 0)
+
+    /// Readable from any thread, without a hop onto the actor.
+    nonisolated static var foregroundFetchesInFlight: Int {
+        foregroundFetches.withLock { $0 }
+    }
+
     // MARK: - Active Downloads (prevent duplicate byte fetches)
 
     /// A shared fetch, cancelled once every caller waiting on it is cancelled,
@@ -113,10 +144,9 @@ actor ImageCacheManager: NSObject {
 
     // MARK: - Cache Directory
 
-    private var cacheDirectory: URL? {
-        FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)
-            .first?.appendingPathComponent(cacheDirectoryName)
-    }
+    /// Resolved once: it was looked up again on every load.
+    private let cacheDirectory: URL? = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)
+        .first?.appendingPathComponent("PlexImageCache")
 
     // MARK: - Initialization
 
@@ -253,6 +283,54 @@ actor ImageCacheManager: NSObject {
         _ = await fetchOriginalData(url: url, key: key)
     }
 
+    // MARK: - Disk-only prefetch (PosterPrefetcher)
+
+    /// What a `prefetchToDisk` call did.
+    nonisolated enum DiskPrefetchOutcome: Sendable {
+        case onDisk, downloaded, failed
+        /// The disk cache is near its budget: nothing was fetched.
+        case noRoom
+    }
+
+    /// True when the file a `quality` load of `url` reads first (the server-sized copy for `.thumb`)
+    /// is on disk. Same key as `image(for:)`; one `stat`, no hop onto the actor.
+    nonisolated func isOnDisk(_ url: URL, quality: ImageQuality = .thumb) -> Bool {
+        guard let dir = cacheDirectory else { return false }
+        return FileManager.default.fileExists(atPath: dir.appendingPathComponent(cacheKey(for: quality.requestURL(for: url))).path)
+    }
+
+    /// Background prefetch stops at 90% of the disk budget, so it never drives eviction.
+    func prefetchHasRoom() -> Bool {
+        loadMetadataIfNeeded()   // the measure below deletes files the metadata does not list
+        return (diskBytes ?? measureDiskAndDropOrphans()) < maxDiskCacheSize * 9 / 10
+    }
+
+    /// Puts the bytes `image(for: url, quality:)` would read on disk, without decoding them or
+    /// touching the memory cache: the same URL rewrite (`requestURL`), trust delegate, key and file,
+    /// and it joins a load of the same URL already in flight. Falls back to the file itself only when
+    /// the server refused to size it (4xx), as `image(for:)` then would; a transient failure is left
+    /// for the tile's own load.
+    func prefetchToDisk(_ url: URL, quality: ImageQuality = .thumb) async -> DiskPrefetchOutcome {
+        let sized = quality.requestURL(for: url)
+        if isOnDisk(url, quality: quality) { return .onDisk }
+        let originalKey = cacheKey(for: url)
+        let originalOnDisk: Bool = {
+            guard sized != url, let dir = cacheDirectory else { return false }
+            return FileManager.default.fileExists(atPath: dir.appendingPathComponent(originalKey).path)
+        }()
+        if missingURLs.contains(sized), originalOnDisk { return .onDisk }
+        guard prefetchHasRoom() else { return .noRoom }
+        if !missingURLs.contains(sized),
+           await fetchOriginalData(url: sized, key: cacheKey(for: sized),
+                                   countsAsForeground: false, onPrefetchSession: true) != nil {
+            return .downloaded
+        }
+        guard sized != url, missingURLs.contains(sized), !Task.isCancelled else { return .failed }
+        if originalOnDisk { return .onDisk }
+        let data = await fetchOriginalData(url: url, key: originalKey, countsAsForeground: false, onPrefetchSession: true)
+        return data != nil ? .downloaded : .failed
+    }
+
     /// Clear all cached images
     func clearAll() async {
         memoryCache.removeAllObjects()
@@ -339,7 +417,8 @@ actor ImageCacheManager: NSObject {
 
         // Refresh if older than TTL
         if age > defaultTTL {
-            if await fetchOriginalData(url: url, key: key) != nil {
+            // A background refresh of bytes already shown, not an on-screen load.
+            if await fetchOriginalData(url: url, key: key, countsAsForeground: false) != nil {
                 // Drop decoded tiers so the next read re-decodes the fresh bytes.
                 for quality in [ImageQuality.thumb, .full, .logo] {
                     memoryCache.removeObject(forKey: memoryKey(diskKey: key, quality: quality))
@@ -350,8 +429,13 @@ actor ImageCacheManager: NSObject {
 
     /// Download the original image bytes, validate, persist to disk, and return them.
     /// Coalesced per-URL so concurrent requests share a single network fetch.
-    private func fetchOriginalData(url: URL, key: String) async -> Data? {
+    /// `countsAsForeground`: counted in `foregroundFetchesInFlight` for the whole wait (a tile's load).
+    /// `onPrefetchSession`: a download this call starts uses `prefetchSession` (PosterPrefetcher).
+    private func fetchOriginalData(url: URL, key: String, countsAsForeground: Bool = true,
+                                   onPrefetchSession: Bool = false) async -> Data? {
         guard !missingURLs.contains(url) else { return nil }
+        if countsAsForeground { Self.foregroundFetches.withLock { $0 += 1 } }
+        defer { if countsAsForeground { Self.foregroundFetches.withLock { $0 -= 1 } } }
         if var existing = activeDownloads[url] {
             existing.waiters += 1
             activeDownloads[url] = existing
@@ -373,10 +457,11 @@ actor ImageCacheManager: NSObject {
             let maxAttempts = 3
             let backoff: [UInt64] = [500_000_000, 1_500_000_000] // ns before retries 2 and 3
 
+            let urlSession = await self.downloadSession(prefetch: onPrefetchSession)
             for attempt in 0..<maxAttempts {
                 let isLastAttempt = attempt == maxAttempts - 1
                 do {
-                    let (data, response) = try await self.session.data(from: url)
+                    let (data, response) = try await urlSession.data(from: url)
 
                     guard let httpResponse = response as? HTTPURLResponse else {
                         return nil

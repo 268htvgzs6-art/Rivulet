@@ -559,6 +559,7 @@ final class ShelfRowCell: UICollectionViewCell {
         init(_ owner: ShelfRowCell) { self.owner = owner }
         @objc func tick(_ link: CADisplayLink) {
             guard let owner else { link.invalidate(); return }
+            PosterPrefetcher.noteMotion()   // background poster downloads wait while the row scrolls
             owner.stepOffset(link)
         }
     }
