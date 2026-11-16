@@ -4,33 +4,42 @@ import XCTest
 final class FocusScrollMotionTests: XCTestCase {
     private let frame60 = 1.0 / 60
 
-    func test_follow_startsWithoutAJump_andSettles() {
-        var y: CGFloat = 0, v: CGFloat = 0, frames = 0
+    /// Runs the spring from rest at 60 Hz until it reports done.
+    private func runSpring(to target: CGFloat, response: Double) -> (frames: Int, maxY: CGFloat, first: CGFloat, end: CGFloat) {
+        var y: CGFloat = 0, v: CGFloat = 0, frames = 0, maxY: CGFloat = 0
         var first: CGFloat?
         while frames < 600 {
-            let s = FocusScrollMotion.follow(from: y, to: 500, velocity: v, dt: frame60, viewport: 1080)
+            let s = FocusScrollMotion.spring(from: y, to: target, velocity: v, dt: frame60,
+                                             viewport: 1080, response: response)
             first = first ?? s.y
-            y = s.y; v = s.velocity; frames += 1
+            y = s.y; v = s.velocity; frames += 1; maxY = max(maxY, y)
             if s.done { break }
         }
-        XCTAssertLessThanOrEqual(first!, 10.5, "first frame is capped by the acceleration limit")
-        XCTAssertEqual(y, 500)
-        XCTAssertLessThan(frames, 90, "settles within ~1.5 s")
+        return (frames, maxY, first!, y)
     }
 
-    func test_follow_retargetKeepsSpeed() {
+    func test_spring_startsGently_settlesOnTarget_withoutOvershoot() {
+        let r = runSpring(to: 450, response: FocusScrollMotion.verticalResponse)
+        XCTAssertLessThan(r.first, 20, "eases in from rest, no kick")
+        XCTAssertEqual(r.end, 450)
+        XCTAssertLessThanOrEqual(r.maxY, 450, "critically damped: no overshoot from rest")
+        XCTAssertLessThan(r.frames, 45, "settles within ~0.75 s")
+    }
+
+    func test_spring_retargetKeepsSpeed() {
         var y: CGFloat = 0, v: CGFloat = 0
-        for _ in 0..<20 {
-            let s = FocusScrollMotion.follow(from: y, to: 500, velocity: v, dt: frame60, viewport: 1080)
+        for _ in 0..<6 {
+            let s = FocusScrollMotion.spring(from: y, to: 300, velocity: v, dt: frame60, viewport: 1080,
+                                             response: FocusScrollMotion.rowResponse)
             y = s.y; v = s.velocity
         }
-        let before = v
-        let s = FocusScrollMotion.follow(from: y, to: 1000, velocity: v, dt: frame60, viewport: 1080)
-        XCTAssertGreaterThanOrEqual(s.velocity, before, "a further target never slows the scroll")
+        let s = FocusScrollMotion.spring(from: y, to: 600, velocity: v, dt: frame60, viewport: 1080,
+                                         response: FocusScrollMotion.rowResponse)
+        XCTAssertGreaterThan(s.velocity, v, "a further target speeds the glide up instead of restarting it")
     }
 
-    func test_follow_farTargetIsBroughtToTwoViewports() {
-        let s = FocusScrollMotion.follow(from: 0, to: 10_000, velocity: 0, dt: frame60, viewport: 1000)
+    func test_spring_farTargetIsBroughtToTwoViewports() {
+        let s = FocusScrollMotion.spring(from: 0, to: 10_000, velocity: 0, dt: frame60, viewport: 1000, response: 0.4)
         XCTAssertGreaterThanOrEqual(s.y, 8000)
     }
 

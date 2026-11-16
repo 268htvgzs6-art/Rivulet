@@ -11,8 +11,7 @@ final class FocusScrollControlledCollectionView: UICollectionView {
     /// Screen-y the TOP section's row top is pinned to (under the logo + pills).
     var topBand: CGFloat = 230
     /// Duration of the controlled vertical scroll. Defaults to the shared
-    /// `FocusScrollMotion.settleDuration` so the home and detail surfaces stay
-    /// in sync; still overridable per instance.
+    /// `FocusScrollMotion.settleDuration`; still overridable per instance.
     var scrollDuration: TimeInterval = FocusScrollMotion.settleDuration
     /// Fires on every focus change — the newly-focused index path, or nil when
     /// focus leaves the collection. Used to track which episode/season is current.

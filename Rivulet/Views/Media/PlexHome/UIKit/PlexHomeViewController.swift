@@ -6802,8 +6802,8 @@ final class PlexHomeViewController: UIViewController {
     /// pixel, with the link still running every frame.
     private var offsetModelY: CGFloat = 0
 
-    /// Follows `targetY` with the system's focus-scroll model. A scroll already
-    /// in flight is retargeted and keeps its speed, so rapid moves never restart.
+    /// Springs to `targetY` (`FocusScrollMotion.spring`). A scroll already in
+    /// flight is retargeted and keeps its speed, so rapid moves never restart.
     private func animateContentOffset(toY targetY: CGFloat) {
         offsetTargetY = targetY
         guard offsetLink == nil else { return }
@@ -6839,9 +6839,9 @@ final class PlexHomeViewController: UIViewController {
         // under a pixel); if something did (a snapshot shift, a restore), start from where it is.
         let shown = collectionView.contentOffset.y
         let from = abs(shown - offsetModelY) < 1 ? offsetModelY : shown
-        let step = FocusScrollMotion.follow(from: from, to: offsetTargetY,
-                                            velocity: offsetVelocity, dt: now - offsetLastTick,
-                                            viewport: collectionView.bounds.height)
+        let step = FocusScrollMotion.spring(from: from, to: offsetTargetY, velocity: offsetVelocity,
+                                            dt: now - offsetLastTick, viewport: collectionView.bounds.height,
+                                            response: FocusScrollMotion.verticalResponse)
         offsetLastTick = now
         offsetVelocity = step.velocity
         offsetModelY = step.y

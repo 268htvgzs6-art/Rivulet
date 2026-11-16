@@ -151,14 +151,15 @@ final class ShelfRowCell: UICollectionViewCell {
     /// off (the layout ignores it), so without this the row restores to item 0.
     private(set) var lastFocusedItemIndex: Int?
 
-    // Driven offset settle (CADisplayLink), sharing FocusScrollMotion's
-    // duration + curve with the vertical focus-scroll so horizontal and
-    // vertical row motion feel identical. (The focus coordinator's default
-    // animation is much faster and reads as a jump cut.)
+    // Driven offset settle (CADisplayLink), the same spring as the vertical
+    // focus-scroll so horizontal and vertical row motion feel identical.
+    // (The focus coordinator's default animation is much faster and reads as a jump cut.)
     private var offsetLink: CADisplayLink?
-    private var animStartX: CGFloat = 0
     private var animTargetX: CGFloat = 0
-    private var animStartTime: CFTimeInterval = 0
+    private var animVelocity: CGFloat = 0
+    /// The unrounded offset the settle set last (see `PlexHomeViewController.offsetModelY`).
+    private var animModelX: CGFloat = 0
+    private var animLastTick: CFTimeInterval = 0
 
     private var displayCount: Int { realCount + (hasSkeleton ? 1 : 0) }
 
@@ -529,14 +530,14 @@ final class ShelfRowCell: UICollectionViewCell {
         onOffsetChanged?(clamped)
     }
 
-    /// Driven settle to a pitch-aligned offset: per-frame CADisplayLink with
-    /// the shared FocusScrollMotion duration + cubic ease-out. Retargets
-    /// continue from the current (mid-flight) position so held presses glide.
+    /// Driven settle to a pitch-aligned offset: a retargetable critically damped spring, the same
+    /// motion as Home's vertical scroll. A press mid-glide keeps the current speed.
     private func animateOffset(to x: CGFloat) {
-        offsetLink?.invalidate()
-        animStartX = rowCollectionView.contentOffset.x
         animTargetX = x
-        animStartTime = CACurrentMediaTime()
+        guard offsetLink == nil else { return }
+        animVelocity = 0
+        animModelX = rowCollectionView.contentOffset.x
+        animLastTick = CACurrentMediaTime()
         // Weak proxy: CADisplayLink retains its target; a cell deallocated
         // mid-flight would otherwise leak with a live link.
         let link = CADisplayLink(target: LinkProxy(self), selector: #selector(LinkProxy.tick(_:)))
@@ -545,10 +546,19 @@ final class ShelfRowCell: UICollectionViewCell {
     }
 
     fileprivate func stepOffset(_ link: CADisplayLink) {
-        let t = min(1, (CACurrentMediaTime() - animStartTime) / FocusScrollMotion.settleDuration)
-        let e = CGFloat(FocusScrollMotion.ease(t))
-        rowCollectionView.contentOffset.x = animStartX + (animTargetX - animStartX) * e
-        if t >= 1 {
+        // The time the frame will be shown, not when this callback ran: a late callback
+        // otherwise makes an uneven step.
+        let now = link.targetTimestamp
+        let shown = rowCollectionView.contentOffset.x
+        let from = abs(shown - animModelX) < 1 ? animModelX : shown
+        let step = FocusScrollMotion.spring(from: from, to: animTargetX, velocity: animVelocity,
+                                            dt: now - animLastTick, viewport: rowCollectionView.bounds.width,
+                                            response: FocusScrollMotion.rowResponse)
+        animLastTick = now
+        animVelocity = step.velocity
+        animModelX = step.y
+        rowCollectionView.contentOffset.x = step.y
+        if step.done {
             link.invalidate()
             if offsetLink === link { offsetLink = nil }
         }
@@ -611,7 +621,7 @@ extension ShelfRowCell: UICollectionViewDataSource, UICollectionViewDelegate {
     }
 
     /// The one driver of horizontal scroll: shifts one pitch only when focus crosses the edge of the
-    /// N visible columns, on the shared FocusScrollMotion settle.
+    /// N visible columns, on the shared FocusScrollMotion spring.
     func collectionView(_ collectionView: UICollectionView,
                         didUpdateFocusIn context: UICollectionViewFocusUpdateContext,
                         with coordinator: UIFocusAnimationCoordinator) {
