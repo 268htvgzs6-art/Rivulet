@@ -548,6 +548,10 @@
         }
       }
     },
+    "%@ (Download)" : {},
+    "%@ (Downloading %lld%%)" : {},
+    "%@ (Unavailable)" : {},
+    "%@ (Waiting…)" : {},
     "%@ Live TV" : {
       "localizations" : {
         "de" : {

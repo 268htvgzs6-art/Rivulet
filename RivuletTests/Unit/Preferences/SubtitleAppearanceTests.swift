@@ -122,4 +122,69 @@ final class SubtitleAppearanceTests: XCTestCase {
             XCTAssertNotNil(SubtitleAppearance.resolvedFamily(family), family)
         }
     }
+
+    // MARK: Downloadable fonts
+
+    func test_fontEntries_installedFirst_thenDownloadable_withoutDuplicates() {
+        let entries = SubtitleAppearance.fontEntries(installed: ["Geeza Pro", ".SF Arabic"],
+                                                     downloadable: ["Diwan Kufi", "geezapro", "SF Arabic", "Al Nile"])
+        XCTAssertEqual(entries.map(\.family), ["Geeza Pro", ".SF Arabic", "Diwan Kufi", "Al Nile"])
+        XCTAssertEqual(entries.map(\.availability), [.installed, .installed, .downloadable, .downloadable])
+    }
+
+    func test_fontLabel_installedIsItsName_downloadableShowsItsState() {
+        let installed = SubtitleAppearance.FontEntry(family: ".SF Arabic", availability: .installed)
+        XCTAssertEqual(SubtitleAppearance.fontLabel(installed, state: .idle), "SF Arabic")
+        let remote = SubtitleAppearance.FontEntry(family: "Diwan Kufi", availability: .downloadable)
+        let idle = SubtitleAppearance.fontLabel(remote, state: .idle)
+        XCTAssertTrue(idle.hasPrefix("Diwan Kufi"))
+        XCTAssertNotEqual(idle, "Diwan Kufi")
+        XCTAssertTrue(SubtitleAppearance.fontLabel(remote, state: .downloading(40)).contains("40"))
+        XCTAssertNotEqual(SubtitleAppearance.fontLabel(remote, state: .failed), idle)
+    }
+
+    /// Until the catalog loads (or if it never does), Apple's families are listed.
+    func test_downloadableFamilies_beforeCatalog_listsAppleFamiliesNotInstalled() {
+        let installed = ["Geeza Pro", ".SF Arabic", "al nile"]
+        let fallback = SubtitleAppearance.downloadableFamilies(
+            installed: installed, catalogLoaded: false, catalogFamilies: [], unconfirmed: [], unconfirmedFailed: false)
+        XCTAssertEqual(fallback, SubtitleAppearance.appleDownloadableArabicFamilies.filter { $0 != "Al Nile" })
+        XCTAssertEqual(SubtitleAppearance.fallbackDownloadableFamilies(installed: installed), fallback)
+        let loaded = SubtitleAppearance.downloadableFamilies(
+            installed: installed, catalogLoaded: true, catalogFamilies: ["Muna"], unconfirmed: ["Farah"],
+            unconfirmedFailed: false)
+        XCTAssertEqual(loaded, ["Muna", "Farah"])
+        let afterFailure = SubtitleAppearance.downloadableFamilies(
+            installed: installed, catalogLoaded: true, catalogFamilies: ["Muna"], unconfirmed: ["Farah"],
+            unconfirmedFailed: true)
+        XCTAssertEqual(afterFailure, ["Muna"])
+    }
+
+    /// With no catalog faces, a download names the family's PostScript faces and each spelling.
+    func test_downloadRequest_usesStaticFacesAndSpellings_whenCatalogHasNone() {
+        let kufi = SubtitleAppearance.downloadRequest(for: "Kufi Standard GK", catalogFaces: [])
+        XCTAssertEqual(kufi.postScriptNames, ["KufiStandardGK"])
+        XCTAssertEqual(kufi.families, ["Kufi Standard GK", "KufiStandardGK"])
+        let fromCatalog = SubtitleAppearance.downloadRequest(for: "Muna", catalogFaces: ["Muna"])
+        XCTAssertEqual(fromCatalog.postScriptNames, ["Muna"])
+        XCTAssertTrue(fromCatalog.families.isEmpty)
+    }
+
+    func test_stableDownloadOrder_keepsApplesOrder_whateverTheCatalogOrder() {
+        let catalog = ["Muna", "KufiStandardGK", "Al Tarikh", "Zeta Extra", "Baghdad", "Alpha Extra"]
+        XCTAssertEqual(SubtitleAppearance.stableDownloadOrder(catalog),
+                       ["Al Tarikh", "Baghdad", "KufiStandardGK", "Muna", "Alpha Extra", "Zeta Extra"])
+        XCTAssertEqual(SubtitleAppearance.stableDownloadOrder(catalog.reversed()),
+                       SubtitleAppearance.stableDownloadOrder(catalog))
+    }
+
+    /// A pick from the list shown before the catalog answers is saved as written, and CoreText
+    /// loads Kufi Standard GK only by its file's family name.
+    func test_fallbackList_spellsKufiAsItsFontFileDoes() {
+        let fallback = SubtitleAppearance.fallbackDownloadableFamilies(installed: [])
+        XCTAssertTrue(fallback.contains("KufiStandardGK"))
+        XCTAssertFalse(fallback.contains("Kufi Standard GK"))
+        XCTAssertEqual(SubtitleAppearance.downloadRequest(for: "KufiStandardGK", catalogFaces: []).postScriptNames,
+                       ["KufiStandardGK"])
+    }
 }

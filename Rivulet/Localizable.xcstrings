@@ -23,6 +23,10 @@
         }
       }
     },
+    "%@ (Download)" : {},
+    "%@ (Downloading %lld%%)" : {},
+    "%@ (Unavailable)" : {},
+    "%@ (Waiting…)" : {},
     "%@ + %lld more" : {
       "localizations" : {
         "de" : {
@@ -21407,7 +21411,7 @@
         }
       }
     },
-    "The typeface for plain subtitles, from the Arabic fonts on this Apple TV. Also in the player's Subtitles menu. Styled ASS subtitles keep their own." : {},
+    "The typeface for plain subtitles, also in the player's Subtitles menu. Fonts marked Download are fetched from Apple when chosen. Styled ASS subtitles keep their own." : {},
     "The username your provider gave you." : {
       "localizations" : {
         "de" : {

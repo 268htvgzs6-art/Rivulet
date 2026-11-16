@@ -78,6 +78,9 @@ final class CardTrackListView: UIView, RailPanelMenuHandling {
     private var hasPinnedInitialFocus = false
     /// The control focus is on: a track row or a stepper row.
     private weak var lastFocusedControl: UIView?
+    /// The choice rows in the menu, by choice index, so a choice whose value changes
+    /// on its own (a font download) can retitle its row's second line in place.
+    private var choiceButtons: [Int: CardTrackRowButton] = [:]
 
     /// `audio` titles each row by language with a format line ("TrueHD 7.1 Atmos").
     convenience init(header: String, tracks: [MediaTrack], selectedTrackId: Int?, showsOffRow: Bool,
@@ -164,6 +167,32 @@ final class CardTrackListView: UIView, RailPanelMenuHandling {
         self.header = header
         super.init(frame: .zero)
         setupViews()
+        // Selector observers unregister themselves when the view goes away.
+        for name in Set(choices.compactMap(\.refreshOn)) {
+            NotificationCenter.default.addObserver(self, selector: #selector(refreshChoiceValues), name: name, object: nil)
+        }
+    }
+
+    /// Re-reads each live choice's value into its row, and an open list's labels.
+    @objc private func refreshChoiceValues() {
+        for (index, button) in choiceButtons {
+            guard let value = choices[index].value?() else { continue }
+            button.setSubtitle(value)
+        }
+        refreshOpenChoice()
+    }
+
+    /// A list that stays open after a pick moves its checkmark and re-reads its labels
+    /// (a font's download progress) in place, keeping focus where it is.
+    private func refreshOpenChoice() {
+        guard let open = openChoice else { return }
+        let config = choices[open]
+        let selected = config.selected()
+        let titles = config.optionTitles?()
+        for (index, button) in rowButtons.enumerated() {
+            button.isChecked = index == selected
+            if let titles, titles.indices.contains(index) { button.setTitle(titles[index]) }
+        }
     }
 
     required init?(coder: NSCoder) {
@@ -227,6 +256,7 @@ final class CardTrackListView: UIView, RailPanelMenuHandling {
         rowButtons = []
         trackButtons = []
         stepperRows = []
+        choiceButtons = [:]
         hasPinnedInitialFocus = false
         // The rows below are a different length; an offset left over from a long
         // list would sit past the end of a short one and show nothing.
@@ -315,13 +345,15 @@ final class CardTrackListView: UIView, RailPanelMenuHandling {
         }
         for (index, config) in choices.enumerated() {
             let button = CardTrackRowButton(row: Row(title: config.title,
-                                                     subtitle: config.options.indices.contains(config.selected())
-                                                         ? config.options[config.selected()] : nil,
+                                                     subtitle: config.value?()
+                                                         ?? (config.options.indices.contains(config.selected())
+                                                             ? config.options[config.selected()] : nil),
                                                      trackId: nil, isSelected: false),
                                             showsChevron: true)
             button.onTap = { [weak self] in self?.showChoice(index) }
             stack.addArrangedSubview(button)
             rowButtons.append(button)
+            if config.value != nil { choiceButtons[index] = button }
         }
 
         if !toggles.isEmpty, !rowButtons.isEmpty, choices.isEmpty {
@@ -373,7 +405,8 @@ final class CardTrackListView: UIView, RailPanelMenuHandling {
                                                      isSelected: index == selected))
             button.onTap = { [weak self] in
                 config.onSelect(index)
-                self?.showChoice(nil)
+                // A list that stays open (Font) just moves its checkmark.
+                config.staysOpen ? self?.refreshOpenChoice() : self?.showChoice(nil)
             }
             stack.addArrangedSubview(button)
             rowButtons.append(button)
@@ -385,12 +418,28 @@ final class CardTrackListView: UIView, RailPanelMenuHandling {
     private func showChoice(_ index: Int?) {
         let returning = openChoice
         openChoice = index
+        if let index { choices[index].onOpen?() }
         buildRows()
         if index == nil, let returning {
             pendingFocus = rowButtons.first { $0.showsChevron && $0.row.title == choices[returning].title }
         }
+        // Going in, focus the selected option explicitly, already scrolled into view. Left to the
+        // fallback, focus could land on the top row, because the row that held it is gone.
+        if index != nil, let selected = rowButtons.first(where: { $0.row.isSelected }) {
+            pendingFocus = selected
+            scrollToShow(selected)
+        }
         setNeedsFocusUpdate()
         updateFocusIfNeeded()
+    }
+
+    /// Centres `row` in the list without animation (clamped to the content).
+    private func scrollToShow(_ row: UIView) {
+        layoutIfNeeded()
+        let frame = row.convert(row.bounds, to: scrollView)
+        let visible = scrollView.bounds.height
+        let maxY = max(0, scrollView.contentSize.height - visible)
+        scrollView.contentOffset = CGPoint(x: 0, y: min(max(0, frame.midY - visible / 2), maxY))
     }
 
     func handleMenuPress() -> Bool {
@@ -521,6 +570,16 @@ struct CardChoiceConfig {
     let options: [String]
     let selected: () -> Int
     let onSelect: (Int) -> Void
+    /// The row's second line when it is not simply the selected option's title.
+    var value: (() -> String)? = nil
+    /// A notification that means `value` may have changed; the open menu re-reads it.
+    var refreshOn: Notification.Name? = nil
+    /// A pick keeps the list open and moves the checkmark instead of going back.
+    var staysOpen = false
+    /// The options' labels now (same order as `options`), re-read in an open list on `refreshOn`.
+    var optionTitles: (() -> [String])? = nil
+    /// Runs as the list opens (the font list starts reading Apple's catalog then).
+    var onOpen: (() -> Void)? = nil
 }
 
 extension CardChoiceConfig {
@@ -535,20 +594,29 @@ extension CardChoiceConfig {
             onSelect: { CaptionAppearance.activeStyleID = styles[$0].id })
     }
 
-    /// The Subtitle Font setting in the player, the same list as Settings: System, then the
-    /// installed Arabic families. A pick restyles the captions at once.
+    /// The Subtitle Font setting in the player, the same list as Settings: System, the installed
+    /// Arabic families, then Apple's downloadable ones marked "(Download)". A pick applies at once
+    /// and the list stays open, so fonts can be tried one after another; a downloadable font is
+    /// fetched in the background and its label shows the progress until the captions switch to it.
     static func subtitleFont() -> CardChoiceConfig {
-        let families = SubtitleAppearance.availableArabicFamilies
+        let entries = SubtitleAppearance.fontPickerEntries()
         return CardChoiceConfig(
             title: String(localized: "Font"),
-            options: [String(localized: "System")] + families.map(SubtitleAppearance.displayName),
+            options: [String(localized: "System")] + entries.map { SubtitleAppearance.fontLabel($0) },
             selected: {
                 guard SubtitleAppearance.fontFamily != nil else { return 0 }
-                return families.firstIndex { SubtitleAppearance.isFontSelected($0) }.map { $0 + 1 } ?? 0
+                return entries.firstIndex { SubtitleAppearance.isFontSelected($0.family) }.map { $0 + 1 } ?? 0
             },
             onSelect: { index in
-                SubtitleAppearance.fontFamily = index == 0 ? nil : families[index - 1]
-            })
+                SubtitleAppearance.selectFont(index == 0 ? nil : entries[index - 1].family)
+            },
+            value: { SubtitleAppearance.fontValueLabel },
+            refreshOn: SubtitleAppearance.fontCatalogDidChange,
+            staysOpen: true,
+            optionTitles: {
+                [String(localized: "System")] + SubtitleAppearance.pickerLabels(for: entries.map(\.family))
+            },
+            onOpen: { SubtitleAppearance.startFontCatalog() })
     }
 }
 

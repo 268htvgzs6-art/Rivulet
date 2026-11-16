@@ -375,18 +375,23 @@ enum SettingsContent {
         }
     }
 
-    /// System (the Accessibility caption font), then every Arabic family this device can load.
-    /// Read by `CaptionAppearance.current()`; the player's Font row shows the same list.
+    /// System (the Accessibility caption font), then every Arabic family this device can load,
+    /// then Apple's downloadable Arabic fonts marked "(Download)". Picking one of those saves it
+    /// and fetches it in the background; captions use it once it is ready. Read by
+    /// `CaptionAppearance.current()`; the player's Font row shows the same list. A pick keeps
+    /// the list open (the checkmark moves), so fonts can be tried one after another.
     private static var subtitleFontPicker: [SettingsRowItem] {
         func row(_ id: String, _ label: String, _ family: String?) -> SettingsRowItem {
-            SettingsRowItem(id: id, verbatim: label, kind: .option(
+            SettingsRowItem(id: id, verbatim: label, kind: .selectable(
                 isSelected: { SubtitleAppearance.isFontSelected(family) },
-                select: { SubtitleAppearance.fontFamily = family }))
+                value: { nil },
+                handler: { page in
+                    SubtitleAppearance.selectFont(family)
+                    (page as? SettingsPageViewController)?.reloadRows()
+                }))
         }
         return [row("sf_system", String(localized: "System"), nil)]
-            + SubtitleAppearance.availableArabicFamilies.map {
-                row("sf_\($0)", SubtitleAppearance.displayName($0), $0)
-            }
+            + SubtitleAppearance.fontPickerEntries().map { row("sf_\($0.family)", SubtitleAppearance.fontLabel($0), $0.family) }
     }
 
     private static var autoplayLimitPicker: [SettingsRowItem] {
@@ -1632,6 +1637,12 @@ enum SettingsContent {
             reload()
         case .plex where PlexAuthManager.shared.isAuthenticated:
             loadPlexServers(reload: reload)
+        case .subtitleFontPicker:
+            // The downloadable fonts join the list once the catalog is read.
+            Task { @MainActor in
+                await SubtitleAppearance.loadFontCatalog()
+                reload()
+            }
         case .liveTVFavorites where LiveTVDataStore.shared.channels.isEmpty:
             // Settings can open before Live TV has loaded its channels.
             Task { @MainActor in
