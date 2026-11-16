@@ -11,7 +11,7 @@ import Foundation
 
 enum FocusScrollMotion {
     /// Duration, in seconds, of the eased settle (FocusScrollControlledCollectionView and the music queue).
-    static let settleDuration: CFTimeInterval = 0.6
+    static let settleDuration: CFTimeInterval = 0.35
 
     /// Eased progress for the focus-scroll settle. Cubic ease-out: fast start,
     /// decelerating to a gentle stop. `t` is linear progress in 0...1.
