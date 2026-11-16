@@ -51,4 +51,31 @@ final class RoundedPosterTests: XCTestCase {
             XCTAssertEqual(image.cgImage?.bitsPerPixel, 32)
         }
     }
+
+    /// An opaque shape draws solid artwork with no alpha channel and a square corner (the cell clips
+    /// it), so TVPosterView skips its alpha scan. Artwork with an alpha channel keeps the drawn corner.
+    func test_render_opaqueShape_dropsAlphaOnlyForSolidSources() {
+        let tile = MediaRowMetrics.poster
+        let shape = RoundedPoster.Shape(tile: tile, scale: 2, opaque: true)
+        let solidFormat = UIGraphicsImageRendererFormat()
+        solidFormat.opaque = true
+        solidFormat.scale = 1
+        solidFormat.preferredRange = .standard
+        let solid = UIGraphicsImageRenderer(size: CGSize(width: 400, height: 100), format: solidFormat).image { ctx in
+            UIColor.red.setFill(); ctx.fill(CGRect(x: 0, y: 0, width: 400, height: 100))
+        }.cgImage!
+        let image = RoundedPoster.render(solid, shape: shape)
+        XCTAssertEqual(image.size, tile.hostSize)
+        let noAlpha: [CGImageAlphaInfo] = [.none, .noneSkipFirst, .noneSkipLast]
+        XCTAssertTrue(noAlpha.contains(image.cgImage!.alphaInfo), "no alpha channel")
+        XCTAssertEqual(image.cgImage?.bitsPerComponent, 8)
+        XCTAssertEqual(alpha(image, x: 0, y: 0), 255, "square corner")
+
+        let withAlpha = UIGraphicsImageRenderer(size: CGSize(width: 400, height: 100)).image { ctx in
+            UIColor.red.setFill(); ctx.fill(CGRect(x: 0, y: 0, width: 400, height: 100))
+        }.cgImage!
+        let baked = RoundedPoster.render(withAlpha, shape: shape)
+        XCTAssertEqual(alpha(baked, x: 0, y: 0), 0, "corner drawn into the artwork")
+        XCTAssertEqual(alpha(baked, x: 40 * 2, y: 40 * 2), 255)
+    }
 }
