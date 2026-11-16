@@ -6499,8 +6499,11 @@ final class PlexHomeViewController: UIViewController {
             return
         }
         // Skip Preview (#416, #593): the tapped tile alone grows into its expanded detail.
-        // An episode keeps its hero and Play, with the show's seasons below.
-        let skipPreview = SettingsStore.bool("skipPreviewCarousel", default: false)
+        // An episode keeps its hero and Play, with the show's seasons below. A tile on a library
+        // page (its grid or any of its rows) always opens this way; every other surface follows
+        // the setting.
+        let opensFromLibrary = if case .library = mode { true } else { false }
+        let skipPreview = opensFromLibrary || SettingsStore.bool("skipPreviewCarousel", default: false)
         if skipPreview {
             guard items.indices.contains(selectedIndex) else { return }
             if items[selectedIndex].kind == .season { selectMediaItem(items[selectedIndex]); return }

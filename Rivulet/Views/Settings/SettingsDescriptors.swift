@@ -165,7 +165,7 @@ enum SettingsDescriptorStore {
         ),
         "skipPreview": SettingDescriptor(
             icon: "rectangle.expand.vertical",
-            description: "Selecting a movie or show opens its full details at once, skipping the preview card. Off keeps the preview, where you can browse the row."
+            description: "Selecting a movie or show opens its full details at once, skipping the preview card. Off keeps the preview, where you can browse the row, except in a library."
         ),
         "detailRating": SettingDescriptor(
             icon: "star.leadinghalf.filled",
