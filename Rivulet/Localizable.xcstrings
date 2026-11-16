@@ -7240,6 +7240,16 @@
         }
       }
     },
+    "E%lld · %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "E%1$lld · %2$@"
+          }
+        }
+      }
+    },
     "ENGINE" : {
       "localizations" : {
         "de" : {
