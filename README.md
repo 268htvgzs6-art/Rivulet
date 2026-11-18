@@ -4,7 +4,7 @@ This is a community fork of [l984-451/Rivulet](https://github.com/l984-451/Rivul
 
 Changes in 1.4.1:
 
-- Home: the background is dark once the hero has scrolled away, and resting on a tile for two seconds fades that title's backdrop in behind the rows
+- Home: the background is dark once focus leaves the hero, and resting on a tile for two seconds fades the rest of the page out for that title's backdrop
 - Fast Up and Down runs on Home no longer brake on every press
 - Detail, season and person pages, the music queue and held-arrow scrolling are timed to the displayed frame
 - Less work per episode card and show badge

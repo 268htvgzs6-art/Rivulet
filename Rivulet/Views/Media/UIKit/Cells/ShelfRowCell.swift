@@ -142,6 +142,16 @@ final class ShelfRowCell: UICollectionViewCell {
             && (previewHiddenItem == nil || item == previewHiddenItem)
     }
 
+    /// What to fade in this row while a held tile's picture shows (PlexHomeViewController.setSpotlight):
+    /// the header and every visible tile but `tile`. `contentView`, so the tiles stay focusable.
+    func spotlightFadeViews(keeping tile: UIView) -> [UIView] {
+        var views: [UIView] = headerLabel.isHidden ? [] : [headerLabel]
+        for cell in rowCollectionView.visibleCells where !tile.isDescendant(of: cell) {
+            views.append(cell.contentView)
+        }
+        return views
+    }
+
     /// Item index to route focus to on the next focus update (preview-dismiss
     /// restoration). One-shot.
     private var pendingFocusIndex: Int?

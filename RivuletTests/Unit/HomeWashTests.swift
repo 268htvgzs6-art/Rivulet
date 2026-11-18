@@ -19,6 +19,12 @@ final class HomeWashTests: XCTestCase {
         XCTAssertEqual(HomeWash.alpha(showcase: 1, hasHero: true, revealed: true), 1)
     }
 
+    func test_spotlightFloor_staysAboveTheAlphaUIKitTreatsAsInvisible() {
+        // UIKit ignores a view for touches and focus below alpha 0.01.
+        XCTAssertGreaterThan(HomeWash.spotlightFloor, 0.01)
+        XCTAssertLessThan(HomeWash.spotlightFloor, 0.05)
+    }
+
     func test_holdRemaining_countsTheHoldFromWhenFocusLanded() {
         let hold = HomeWash.holdDelay
         XCTAssertEqual(HomeWash.holdRemaining(now: 100, armedAt: 100, lastMotion: 0), hold, accuracy: 0.0001)

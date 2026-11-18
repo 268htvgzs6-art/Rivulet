@@ -157,8 +157,8 @@ struct WhatsNewView: View {
     static let changelogs: [(version: String, features: [String])] = [
         ("1.4.1 (131)", [
             "> This is a community fork of Rivulet, not an official Rivulet release. Changes since 1.4 (130) are below.",
-            "Home: the background goes dark once you scroll down past the featured title",
-            "Rest on a poster for two seconds and its wide picture fades in behind the rows",
+            "Home: the background goes dark once you move down from the featured title",
+            "Rest on a poster for two seconds: the page fades away to its wide picture, with only that poster left",
             "Fast Up and Down runs on Home no longer brake a little on every press",
             "Detail, season and person pages, the music queue and held-arrow scrolling move as evenly as Home",
             "Less work while moving between episodes and drawing episode cards and show badges",

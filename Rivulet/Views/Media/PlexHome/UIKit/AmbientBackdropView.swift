@@ -81,10 +81,13 @@ final class AmbientBackdropView: UIView {
     ///
     /// `crossfade: false` swaps the picture with no fade, for a wash that is hidden (alpha 0)
     /// and is about to be faded in by its owner. `onApplied` runs once the picture is in place:
-    /// straight away for a picture already showing, never if it fails to load.
-    func setAmbient(url: URL?, crossfade: Bool = true, onApplied: (() -> Void)? = nil) {
+    /// straight away for a picture already showing, never if it fails to load (the next request
+    /// for it asks again). `fullSize` loads the picture as the hero does, for a wash that is the
+    /// picture on screen and not a soft backdrop under the rows.
+    func setAmbient(url: URL?, crossfade: Bool = true, fullSize: Bool = false, onApplied: (() -> Void)? = nil) {
         guard let url else { return }
-        guard url != currentURL else {
+        // A repeat of a picture that never arrived, with no load running, asks again.
+        guard url != currentURL || (appliedURL != url && loadTask == nil) else {
             if appliedURL == url { onApplied?() } else if onApplied != nil { self.onApplied = onApplied }
             return
         }
@@ -96,12 +99,19 @@ final class AmbientBackdropView: UIView {
 
         let oldImage = crossfade ? currentImageView.image : nil
         loadTask = Task { [weak self] in
-            var image = await ImageCacheManager.shared.image(for: url)
+            var image: UIImage?
+            if fullSize {
+                image = await ImageCacheManager.shared.imageFullSize(for: url)
+            } else {
+                image = await ImageCacheManager.shared.image(for: url)
+            }
             // Off the main actor: Now Playing's transform resamples and redraws the cover.
             if let source = image, let transform = self?.imageTransform {
                 image = await Task.detached { transform(source) }.value
             }
-            guard let self, !Task.isCancelled, let image, self.currentURL == url else { return }
+            guard let self, !Task.isCancelled, self.currentURL == url else { return }
+            self.loadTask = nil
+            guard let image else { return }
             self.appliedURL = url
             if crossfade {
                 self.applyImage(image, replacing: oldImage)
@@ -186,6 +196,10 @@ enum HomeWash {
     static let revealAlpha: CGFloat = 1.0
     /// The page colour under the wash: what a scrolled-down page rests on.
     static let pageBaseColor: UIColor = .black
+    /// While a held tile's picture shows, the rest of the page fades out and only that tile stays.
+    /// A part that holds focusable controls (the hero's buttons, a library's sort bar) stops at this
+    /// alpha instead of 0: UIKit does not move focus to a view that is fully transparent.
+    static let spotlightFloor: CGFloat = 0.02
 
     /// The wash's alpha. `showcase` is 1 with the hero at rest and 0 once it has scrolled away;
     /// a page with no hero rests dark. A revealed picture shows wherever the page is.
