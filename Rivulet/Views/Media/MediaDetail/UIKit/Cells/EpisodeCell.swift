@@ -438,14 +438,23 @@ final class EpisodeCell: UIView {
         overlayTitleLabel.isHidden = !titleInArtwork
         overlayTitleLabel.text = titleInArtwork ? Self.overlayTitle(for: episode) : nil
         thumbnailCard.accessibilityLabel = overlayTitleLabel.text
-        episodeLabel.text = Self.episodeLabel(for: episode, showSeasonPrefix: showSeasonPrefix).uppercased()
-        titleLabel.text = episode.title.isEmpty ? String(localized: "Episode") : episode.title
-        summaryLabel.text = episode.overview
-        summaryLabel.isHidden = (episode.overview ?? "").isEmpty
-        dateLabel.text = Self.displayDate(for: episode)
-        dateLabel.isHidden = dateLabel.text == nil
-        ratingBadge.text = episode.contentRating
-        ratingBadge.isHidden = (episode.contentRating ?? "").isEmpty
+        if titleInArtwork {
+            // The block is hidden: leave it empty, so nothing is formatted or measured for it.
+            episodeLabel.text = nil
+            titleLabel.text = nil
+            summaryLabel.text = nil
+            dateLabel.text = nil
+            ratingBadge.text = nil
+        } else {
+            episodeLabel.text = Self.episodeLabel(for: episode, showSeasonPrefix: showSeasonPrefix).uppercased()
+            titleLabel.text = episode.title.isEmpty ? String(localized: "Episode") : episode.title
+            summaryLabel.text = episode.overview
+            summaryLabel.isHidden = (episode.overview ?? "").isEmpty
+            dateLabel.text = Self.displayDate(for: episode)
+            dateLabel.isHidden = dateLabel.text == nil
+            ratingBadge.text = episode.contentRating
+            ratingBadge.isHidden = (episode.contentRating ?? "").isEmpty
+        }
 
         // A resume point outranks the watched glyph, as in Plex.
         let inProgress = (episode.watchProgress.map { $0 > 0 && $0 < 1 }) ?? false
@@ -600,6 +609,12 @@ final class EpisodeCell: UIView {
     /// a faint tint for an episode's focused thumb, clear otherwise.
     private func updateDescriptionGlass(_ coordinator: UIFocusAnimationCoordinator?) {
         let apply = { [self] in
+            // A hidden block (in-card title, trailer) shows no glass: don't build the effect.
+            if descriptionBlock.isHidden {
+                descriptionGlass.backgroundColor = .clear
+                descriptionGlass.effect = nil
+                return
+            }
             if descFocused {
                 descriptionGlass.backgroundColor = UIColor.white.withAlphaComponent(0.18)
                 descriptionGlass.effect = Self.frostedEffect()
