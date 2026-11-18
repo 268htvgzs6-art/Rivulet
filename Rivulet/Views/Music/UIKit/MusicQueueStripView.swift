@@ -156,7 +156,8 @@ final class MusicQueueStripView: UIView, UICollectionViewDataSource, UICollectio
     }
 
     fileprivate func stepOffset(_ link: CADisplayLink) {
-        let t = min(1, (CACurrentMediaTime() - animStartTime) / FocusScrollMotion.settleDuration)
+        // The time the frame will be shown, not when this callback ran: even steps under load.
+        let t = min(1, (link.targetTimestamp - animStartTime) / FocusScrollMotion.settleDuration)
         collectionView.contentOffset.x = animStartX + (animTargetX - animStartX) * CGFloat(FocusScrollMotion.ease(t))
         if t >= 1 {
             link.invalidate()

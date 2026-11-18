@@ -6920,7 +6920,10 @@ final class PlexHomeViewController: UIViewController {
     private func animateContentOffset(toY targetY: CGFloat) {
         // A press further along the way the page is moving adds a little speed, so a run of
         // presses builds momentum. Only a new target counts: Search can ask twice for one press.
-        if offsetLink != nil, (targetY - offsetTargetY) * offsetVelocity > 0 {
+        // Only below the cap: the spring alone passes it on a long run, and clamping it there would
+        // brake the page on every press.
+        if offsetLink != nil, (targetY - offsetTargetY) * offsetVelocity > 0,
+           abs(offsetVelocity) < FocusScrollMotion.maxVerticalSpeed {
             let speed = FocusScrollMotion.maxVerticalSpeed
             offsetVelocity = min(max(offsetVelocity * FocusScrollMotion.verticalMomentum, -speed), speed)
         }
@@ -7007,7 +7010,7 @@ final class PlexHomeViewController: UIViewController {
     /// second over ~2.5s of holding; clamps at either end of the content.
     @objc fileprivate func stepFastScroll(_ link: CADisplayLink) {
         guard let heldArrow else { stopFastScroll(); return }
-        let now = CACurrentMediaTime()
+        let now = link.targetTimestamp   // when the frame is shown, as in stepOffset
         let dt = now - fastScrollLastTick
         fastScrollLastTick = now
         let velocity = min(9000.0, 1500.0 + 3000.0 * (now - fastScrollStart))

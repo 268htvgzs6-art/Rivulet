@@ -151,8 +151,8 @@ final class ShelfRowCell: UICollectionViewCell {
     /// off (the layout ignores it), so without this the row restores to item 0.
     private(set) var lastFocusedItemIndex: Int?
 
-    // Driven offset settle (CADisplayLink), the same spring as the vertical
-    // focus-scroll so horizontal and vertical row motion feel identical.
+    // Driven offset settle (CADisplayLink) on a critically damped spring (`rowResponse`).
+    // Home's vertical scroll uses a softer one with momentum (`verticalResponse`).
     // (The focus coordinator's default animation is much faster and reads as a jump cut.)
     private var offsetLink: CADisplayLink?
     private var animTargetX: CGFloat = 0
@@ -540,8 +540,8 @@ final class ShelfRowCell: UICollectionViewCell {
         onOffsetChanged?(clamped)
     }
 
-    /// Driven settle to a pitch-aligned offset: a retargetable critically damped spring, the same
-    /// motion as Home's vertical scroll. A press mid-glide keeps the current speed.
+    /// Driven settle to a pitch-aligned offset: a retargetable critically damped spring.
+    /// A press mid-glide keeps the current speed.
     private func animateOffset(to x: CGFloat) {
         animTargetX = x
         guard offsetLink == nil else { return }

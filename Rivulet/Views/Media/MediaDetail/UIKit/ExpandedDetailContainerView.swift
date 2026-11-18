@@ -582,7 +582,8 @@ final class ExpandedDetailContainerView: UIView {
         guard let anim = scrollAnim else {
             link.invalidate(); scrollLink = nil; return
         }
-        let elapsed = CACurrentMediaTime() - anim.startTime
+        // The time the frame will be shown, not when this callback ran: even steps under load.
+        let elapsed = link.targetTimestamp - anim.startTime
         let t = min(1, max(0, elapsed / anim.duration))
         let eased = t * t * (3 - 2 * t)  // smoothstep
         setScrollOffset(anim.start + (anim.end - anim.start) * eased)
