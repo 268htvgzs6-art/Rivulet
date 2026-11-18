@@ -155,6 +155,20 @@ struct WhatsNewView: View {
     // MARK: - Changelog Data
 
     static let changelogs: [(version: String, features: [String])] = [
+        ("1.4.1 (131)", [
+            "> This is a community fork of Rivulet, not an official Rivulet release. Changes since 1.4 (130) are below.",
+            "Home: the background goes dark once you scroll down past the featured title",
+            "Rest on a poster for two seconds and its wide picture fades in behind the rows",
+            "Fast Up and Down runs on Home no longer brake a little on every press",
+            "Detail, season and person pages, the music queue and held-arrow scrolling move as evenly as Home",
+            "Less work while moving between episodes and drawing episode cards and show badges",
+            "A poster no longer flashes the failed icon while it reloads the same picture",
+            "A collection your server features in a library can be pinned to that library page again",
+            "Swiping on a title of unknown length no longer leaves the bar stuck at 0:00",
+            "The player's Font list shows current labels",
+            "A skip from Siri or the iPhone's controls no longer stops a fast-forward",
+            "If the server refuses to convert a film at a chosen quality, the original plays instead of an error",
+        ]),
         ("1.4 (130)", [
             "> This is a community fork of Rivulet 1.3.1 (129) with the changes below. It is not an official Rivulet release.",
             "Home and its rows scroll on a smooth spring that lands softly, and repeated presses build momentum",

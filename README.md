@@ -1,6 +1,19 @@
-## About this fork (1.4)
+## About this fork (1.4.1)
 
 This is a community fork of [l984-451/Rivulet](https://github.com/l984-451/Rivulet), based on Rivulet 1.3.1 (129). It is not affiliated with or endorsed by Rivulet's author, and the upstream repository remains the official app. Each change is its own commit, so it can be offered upstream on its own.
+
+Changes in 1.4.1:
+
+- Home: the background is dark once the hero has scrolled away, and resting on a tile for two seconds fades that title's backdrop in behind the rows
+- Fast Up and Down runs on Home no longer brake on every press
+- Detail, season and person pages, the music queue and held-arrow scrolling are timed to the displayed frame
+- Less work per episode card and show badge
+- A poster tile no longer flashes the failed icon while it reloads the same poster
+- A collection the server features in a library can be pinned to that library page
+- Swipe to scrub on a title of unknown length no longer leaves the bar at 0:00
+- The player's Font list shows current labels
+- A remote skip during fast-forward no longer stops the fast-forward
+- Playback falls back to the original file when the server refuses a quality transcode
 
 Changes in 1.4:
 
