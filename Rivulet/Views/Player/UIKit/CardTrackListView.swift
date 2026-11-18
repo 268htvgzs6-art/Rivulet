@@ -400,7 +400,11 @@ final class CardTrackListView: UIView, RailPanelMenuHandling {
     private func buildSubmenu(_ config: CardChoiceConfig) {
         headerLabel.text = config.title
         let selected = config.selected()
-        for (index, title) in config.options.enumerated() {
+        // Live labels when the choice has them (a font's download state), so a reopened list
+        // does not show the labels from when the menu was built.
+        let live = config.optionTitles?()
+        let titles = live?.count == config.options.count ? live ?? config.options : config.options
+        for (index, title) in titles.enumerated() {
             let button = CardTrackRowButton(row: Row(title: title, subtitle: nil, trackId: nil,
                                                      isSelected: index == selected))
             button.onTap = { [weak self] in

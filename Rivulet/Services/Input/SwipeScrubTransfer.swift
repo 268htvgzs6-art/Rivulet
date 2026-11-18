@@ -6,8 +6,8 @@
 //  Rivulet
 //
 //  The VOD swipe-to-scrub transfer function, from finger travel on the touch
-//  surface to seconds on the playhead. It replaces a flat 0.5 s per point (a
-//  2-hour title crossed in a short swipe) and the post-lift "flick" (a jump not
+//  surface to seconds on the playhead. It replaces a flat 0.5 s per point (100 s
+//  for a 200 pt swipe on any title) and the post-lift "flick" (a jump not
 //  tied to finger travel). Built on the Live TV timeline scrub's pieces
 //  (`LiveTimelineScrub.Tuning`, `LiveTimelineScrub.accelerationMultiplier`):
 //  the base rate scales with the runtime, so a swipe covers the same share of

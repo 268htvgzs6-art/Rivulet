@@ -1216,6 +1216,13 @@ class PlayerContainerViewController: UIViewController {
                     + (focusIsOnTransportButton ? "focus is on a control" : "player state"))
                 return
             }
+            // No known runtime, no scrub: travel would map to 0 s and leave a scrub pending at
+            // 0:00, which the next Select or Play/Pause would commit.
+            let runtime = viewModel?.duration ?? 0
+            guard runtime.isFinite, runtime > 0 else {
+                DiagLog.notice(.playback, "[scrub] swipe did not start a scrub: runtime unknown")
+                return
+            }
             swipeScrubEntered = true
             swipeScrubLastX = translation.x
             swipeScrubTravel = 0

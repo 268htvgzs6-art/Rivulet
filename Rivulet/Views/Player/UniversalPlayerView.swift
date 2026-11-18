@@ -498,7 +498,9 @@ private final class UniversalPlaybackInputTarget: PlaybackInputTarget {
                     speedAfter: speedAfter
                 )
             } else if vm.isScrubbing {
-                vm.updateSwipeScrubPosition(by: seconds)
+                // Not `updateSwipeScrubPosition`: a swipe takes over from a running shuttle,
+                // and a remote-command skip must only nudge it.
+                vm.scrubRelative(by: seconds)
             } else {
                 Task { await vm.seekRelative(by: seconds) }
             }
@@ -630,10 +632,6 @@ struct UniversalPlayerView: View {
     @Environment(\.dismiss) private var dismiss
 
     @State private var hasStartedPlayback = false
-
-    /// Caption appearance for the Aether subtitle overlay. Refreshed on
-    /// CaptionAppearance.changedNotification so restyles apply live.
-    @State private var captionStyle: CaptionStyle = CaptionAppearance.current()
 
     /// Initialize with metadata (creates viewModel internally)
     @MainActor
