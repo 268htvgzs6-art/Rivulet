@@ -4011,6 +4011,8 @@ final class PlexHomeViewController: UIViewController {
         updateVisibleShelfRows()
         updateAmbientIfNeeded()
         applyWashAlpha()
+        // Cells this apply brought in while a held picture shows join the fade.
+        if dwellRevealed, let tile = dwellView { setSpotlight(keeping: tile) }
         // Cold launch: the hero cell materializes only after this apply's
         // layout pass — re-assert the launch focus once it exists.
         DispatchQueue.main.async { [weak self] in
@@ -4895,9 +4897,11 @@ final class PlexHomeViewController: UIViewController {
         for header in collectionView.visibleSupplementaryViews(ofKind: UICollectionView.elementKindSectionHeader) {
             fades.append((view: header, alpha: HomeWash.spotlightFloor))
         }
+        // The library's A-Z strip sits outside the collection view; its letters are focusable.
+        if alphabetBarShown { fades.append((view: alphabetBar, alpha: HomeWash.spotlightFloor)) }
         for fade in fades { spotlightFaded.add(fade.view) }
         UIView.animate(withDuration: HomeWash.revealDuration, delay: 0,
-                       options: [.beginFromCurrentState, .curveEaseInOut]) {
+                       options: [.beginFromCurrentState, .curveEaseInOut, .allowUserInteraction]) {
             for fade in fades { fade.view.alpha = fade.alpha }
         }
     }
@@ -4913,7 +4917,8 @@ final class PlexHomeViewController: UIViewController {
         let views = spotlightFaded.allObjects
         guard !views.isEmpty else { return }
         spotlightFaded.removeAllObjects()
-        UIView.animate(withDuration: duration, delay: 0, options: [.beginFromCurrentState, .curveEaseOut]) {
+        UIView.animate(withDuration: duration, delay: 0,
+                       options: [.beginFromCurrentState, .curveEaseOut, .allowUserInteraction]) {
             for view in views { view.alpha = 1 }
         }
     }

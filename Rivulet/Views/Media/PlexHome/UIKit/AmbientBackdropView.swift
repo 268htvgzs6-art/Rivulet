@@ -18,6 +18,8 @@ final class AmbientBackdropView: UIView {
     private var currentURL: URL?
     /// The URL of the picture actually on screen (currentURL may still be loading).
     private var appliedURL: URL?
+    /// True when the current request asked for the full-size picture (see setAmbient).
+    private var currentIsFullSize = false
     /// Called once when the requested picture is in place (see setAmbient).
     private var onApplied: (() -> Void)?
 
@@ -87,11 +89,15 @@ final class AmbientBackdropView: UIView {
     func setAmbient(url: URL?, crossfade: Bool = true, fullSize: Bool = false, onApplied: (() -> Void)? = nil) {
         guard let url else { return }
         // A repeat of a picture that never arrived, with no load running, asks again.
-        guard url != currentURL || (appliedURL != url && loadTask == nil) else {
+        // So does a full-size request for a picture that is in place only at backdrop size.
+        let upgrade = fullSize && !currentIsFullSize && url == currentURL
+        guard url != currentURL || upgrade || (appliedURL != url && loadTask == nil) else {
             if appliedURL == url { onApplied?() } else if onApplied != nil { self.onApplied = onApplied }
             return
         }
+        if upgrade { appliedURL = nil }
         currentURL = url
+        currentIsFullSize = fullSize
         Self.lastURL = url
         self.onApplied = onApplied
         loadTask?.cancel()
