@@ -87,7 +87,7 @@ final class FocusScrollControlledCollectionView: UICollectionView {
         }
         scrollStartY = contentOffset.y          // continue from the current position
         scrollTargetY = targetY
-        scrollStartTime = CACurrentMediaTime()
+        scrollStartTime = 0   // stamped on the link's clock at the first step
         let link = CADisplayLink(target: self, selector: #selector(stepScroll))
         link.add(to: .main, forMode: .common)
         scrollLink = link
@@ -95,6 +95,8 @@ final class FocusScrollControlledCollectionView: UICollectionView {
 
     @objc private func stepScroll(_ link: CADisplayLink) {
         // The time the frame will be shown, not when this callback ran: even steps under load.
+        // The start is the last frame's time, so the first step covers exactly one frame.
+        if scrollStartTime == 0 { scrollStartTime = link.timestamp }
         let elapsed = link.targetTimestamp - scrollStartTime
         let t = scrollDuration > 0 ? min(1, elapsed / scrollDuration) : 1
         let e = FocusScrollMotion.ease(t)   // shared focus-scroll curve (cubic ease-out)

@@ -148,7 +148,7 @@ final class MusicQueueStripView: UIView, UICollectionViewDataSource, UICollectio
         }
         animStartX = collectionView.contentOffset.x
         animTargetX = target
-        animStartTime = CACurrentMediaTime()
+        animStartTime = 0   // stamped on the link's clock at the first step
         // A weak proxy: the link retains its target.
         let link = CADisplayLink(target: LinkProxy(self), selector: #selector(LinkProxy.tick(_:)))
         link.add(to: .main, forMode: .common)
@@ -157,6 +157,8 @@ final class MusicQueueStripView: UIView, UICollectionViewDataSource, UICollectio
 
     fileprivate func stepOffset(_ link: CADisplayLink) {
         // The time the frame will be shown, not when this callback ran: even steps under load.
+        // The start is the last frame's time, so the first step covers exactly one frame.
+        if animStartTime == 0 { animStartTime = link.timestamp }
         let t = min(1, (link.targetTimestamp - animStartTime) / FocusScrollMotion.settleDuration)
         collectionView.contentOffset.x = animStartX + (animTargetX - animStartX) * CGFloat(FocusScrollMotion.ease(t))
         if t >= 1 {

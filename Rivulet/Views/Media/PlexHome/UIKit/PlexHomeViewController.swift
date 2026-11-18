@@ -6995,8 +6995,8 @@ final class PlexHomeViewController: UIViewController {
         guard fastScrollLink == nil, heldArrow != nil, entryMove?.isMoving != true else { return }
         offsetLink?.invalidate()
         offsetLink = nil
-        fastScrollStart = CACurrentMediaTime()
-        fastScrollLastTick = fastScrollStart
+        fastScrollStart = 0   // both stamped on the link's clock at the first step
+        fastScrollLastTick = 0
         let link = CADisplayLink(target: DisplayLinkProxy(self), selector: #selector(DisplayLinkProxy.fastTick(_:)))
         link.add(to: .main, forMode: .common)
         fastScrollLink = link
@@ -7012,6 +7012,10 @@ final class PlexHomeViewController: UIViewController {
     @objc fileprivate func stepFastScroll(_ link: CADisplayLink) {
         guard let heldArrow else { stopFastScroll(); return }
         let now = link.targetTimestamp   // when the frame is shown, as in stepOffset
+        if fastScrollStart == 0 {
+            fastScrollStart = link.timestamp
+            fastScrollLastTick = link.timestamp
+        }
         let dt = now - fastScrollLastTick
         fastScrollLastTick = now
         let velocity = min(9000.0, 1500.0 + 3000.0 * (now - fastScrollStart))

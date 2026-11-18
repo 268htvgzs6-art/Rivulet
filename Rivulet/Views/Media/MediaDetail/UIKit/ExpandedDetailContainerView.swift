@@ -560,7 +560,8 @@ final class ExpandedDetailContainerView: UIView {
     private struct ScrollAnim {
         let start: CGFloat
         let end: CGFloat
-        let startTime: CFTimeInterval
+        /// 0 until the first step stamps it on the link's clock.
+        var startTime: CFTimeInterval
         let duration: CFTimeInterval
         let completion: () -> Void
     }
@@ -571,7 +572,7 @@ final class ExpandedDetailContainerView: UIView {
         scrollLink?.invalidate()
         scrollAnim = ScrollAnim(
             start: scrollOffset, end: clampedTarget,
-            startTime: CACurrentMediaTime(), duration: duration, completion: completion
+            startTime: 0, duration: duration, completion: completion
         )
         let link = CADisplayLink(target: self, selector: #selector(tickScroll))
         link.add(to: .main, forMode: .common)
@@ -579,10 +580,15 @@ final class ExpandedDetailContainerView: UIView {
     }
 
     @objc private func tickScroll(_ link: CADisplayLink) {
-        guard let anim = scrollAnim else {
+        guard var anim = scrollAnim else {
             link.invalidate(); scrollLink = nil; return
         }
         // The time the frame will be shown, not when this callback ran: even steps under load.
+        // The start is the last frame's time, so the first step covers exactly one frame.
+        if anim.startTime == 0 {
+            anim.startTime = link.timestamp
+            scrollAnim = anim
+        }
         let elapsed = link.targetTimestamp - anim.startTime
         let t = min(1, max(0, elapsed / anim.duration))
         let eased = t * t * (3 - 2 * t)  // smoothstep

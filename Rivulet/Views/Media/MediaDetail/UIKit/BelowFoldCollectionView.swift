@@ -1074,7 +1074,7 @@ final class BelowFoldCollectionView: UIView, UICollectionViewDelegate {
         offsetTargetY = targetY
         offsetDuration = max(0.0001, duration)
         offsetCompletion = completion
-        offsetStartTime = CACurrentMediaTime()
+        offsetStartTime = 0   // stamped on the link's clock at the first step
         let link = CADisplayLink(target: self, selector: #selector(stepOffset))
         link.add(to: .main, forMode: .common)
         offsetLink = link
@@ -1082,6 +1082,8 @@ final class BelowFoldCollectionView: UIView, UICollectionViewDelegate {
 
     @objc private func stepOffset(_ link: CADisplayLink) {
         // The time the frame will be shown, not when this callback ran: even steps under load.
+        // The start is the last frame's time, so the first step covers exactly one frame.
+        if offsetStartTime == 0 { offsetStartTime = link.timestamp }
         let elapsed = link.targetTimestamp - offsetStartTime
         let t = min(1, max(0, elapsed / offsetDuration))
         // Quadratic ease-in-out — visually matches UIView's .curveEaseInOut.
