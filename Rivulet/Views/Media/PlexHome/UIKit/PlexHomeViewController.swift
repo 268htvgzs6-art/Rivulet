@@ -562,6 +562,24 @@ final class PlexHomeViewController: UIViewController {
     /// Backmost ambient wash over the page's black base; latched once per screen
     /// (see updateAmbientIfNeeded()).
     private var ambientView: AmbientBackdropView!
+    /// The hero's own picture, put back in the wash after a held tile's picture has faded out.
+    private var heroAmbientURL: URL?
+    /// A held tile's picture (see beginDwell): the tile and its picture while a hold is armed,
+    /// `dwellOwnsWash` from the hold firing until its picture has faded back out, and
+    /// `dwellRevealed` while that picture is showing.
+    private var dwellURL: URL?
+    private weak var dwellView: UIView?
+    /// A shelf row's tile is read one run-loop turn after its focus callback (see shelfTileFocused).
+    private var dwellViewPending = false
+    private var dwellWork: DispatchWorkItem?
+    private var dwellArmedAt: CFTimeInterval = 0
+    private var dwellOwnsWash = false
+    private var dwellRevealed = false
+    /// Bumped whenever a reveal starts or ends, so a late picture or fade completion is ignored.
+    private var washGeneration = 0
+    /// When and where the page last moved; a reveal waits for it to be still.
+    private var lastPageMotion: CFTimeInterval = 0
+    private var lastWashOffset: CGFloat = 0
     private var backdropView: HeroBackdropView!
     private var collectionView: UICollectionView!
     private var dataSource: UICollectionViewDiffableDataSource<HomeSectionID, HomeItemID>!
@@ -845,7 +863,7 @@ final class PlexHomeViewController: UIViewController {
         // Every page but Search is opaque black under its artwork wash (drill-in pages, collection
         // and playlist, are also presented through BlurFadeAnimator, which assumes an opaque page).
         // Search keeps a clear root: an opaque fill reads as a darker panel against the system surround.
-        if case .search = mode { view.backgroundColor = .clear } else { view.backgroundColor = .black }
+        if case .search = mode { view.backgroundColor = .clear } else { view.backgroundColor = HomeWash.pageBaseColor }
 
         Perf.event(.homeFirstRender, message: "viewDidLoad start")
 
@@ -2122,6 +2140,7 @@ final class PlexHomeViewController: UIViewController {
     override func viewWillDisappear(_ animated: Bool) {
         super.viewWillDisappear(animated)
         backdropView.setActive(false)
+        cancelDwell()
         // Stop taking Menu presses the moment the page leaves the screen, and
         // keep the handler list from growing by one per page visited. A fresh
         // appearance re-registers.
@@ -2287,8 +2306,9 @@ final class PlexHomeViewController: UIViewController {
         // on the page's black base. Not frosted: a full-screen material adds an
         // offscreen render pass to every frame drawn while the page moves.
         // The hero art (added next, in front) bleeds full-screen at the top and
-        // translates up on scroll; past it the wash shows. Visible even when the
-        // hero is off. Latched once per screen by updateAmbientIfNeeded().
+        // translates up on scroll. Past it the wash is hidden and the rows rest on the dark
+        // page, until focus rests on a tile and that tile's picture fades in (applyWashAlpha,
+        // beginDwell). Seeded once per screen by updateAmbientIfNeeded() where there is no hero.
         view.addSubview(ambientView)
         NSLayoutConstraint.activate([
             ambientView.topAnchor.constraint(equalTo: view.topAnchor),
@@ -2330,8 +2350,10 @@ final class PlexHomeViewController: UIViewController {
                                  titleCheck: HeroTitleCheck? = nil) {
         backdropView.setBackdrop(url: url, item: item, host: self, paging: paging, titleCheck: titleCheck)
         // The ambient wash tracks the hero: same artwork, behind it. Every hero
-        // page change lands here, so this is the only place the wash needs driving.
-        ambientView.setAmbient(url: url)
+        // page change lands here. A held tile's picture keeps the wash until it has faded out
+        // (see finishConceal), then the hero's picture returns.
+        if url != nil { heroAmbientURL = url }
+        if !dwellOwnsWash { ambientView.setAmbient(url: url) }
         if url == nil {
             markHeroReady()
         }
@@ -3970,6 +3992,7 @@ final class PlexHomeViewController: UIViewController {
         // refresh inside a row must be pushed to the visible cells by hand.
         updateVisibleShelfRows()
         updateAmbientIfNeeded()
+        applyWashAlpha()
         // Cold launch: the hero cell materializes only after this apply's
         // layout pass — re-assert the launch focus once it exists.
         DispatchQueue.main.async { [weak self] in
@@ -4053,6 +4076,9 @@ final class PlexHomeViewController: UIViewController {
         }
         cell.onLongPressItem = { [weak self] itemIndex in
             self?.presentShelfTileMenu(sectionID: sectionID, itemIndex: itemIndex)
+        }
+        cell.onFocusItem = { [weak self] itemIndex in
+            self?.shelfTileFocused(sectionID: sectionID, itemIndex: itemIndex)
         }
         cell.onOffsetChanged = { [weak self] offset in
             self?.shelfOffsets[sectionID] = offset
@@ -4736,6 +4762,122 @@ final class PlexHomeViewController: UIViewController {
         guard let firstItem else { return }
         let request = firstItem.heroBackdropRequest()
         ambientView.setAmbient(url: request.backdropURL ?? request.thumbnailURL)
+    }
+
+    // MARK: - Wash visibility (dark when scrolled; a held tile reveals its picture)
+
+    /// The wash shows with the hero and is hidden once the hero has scrolled away, so the rows
+    /// rest on the dark page. One alpha, no layout: safe to call on every scroll frame.
+    private func applyWashAlpha() {
+        let showcase = HeroBackdropView.showcasePercentage(collectionView.contentOffset.y,
+                                                           shelfTop: Self.heroBackdropFloor)
+        let target = HomeWash.alpha(showcase: showcase, hasHero: heroSectionIndex != nil, revealed: dwellRevealed)
+        if ambientView.alpha != target { ambientView.alpha = target }
+    }
+
+    /// Focus landed on a tile of a shelf row.
+    private func shelfTileFocused(sectionID: HomeSectionID, itemIndex: Int) {
+        let request = shelfSection(id: sectionID)?.items[safe: itemIndex]?.heroBackdropRequest()
+        beginDwell(url: request?.backdropURL ?? request?.thumbnailURL, view: nil)
+        guard dwellURL != nil else { return }
+        // The row reports an index, not the tile. Read the tile once this focus update has
+        // finished, so it does not matter whether the row or the page hears about the move first.
+        dwellViewPending = true
+        let armedAt = dwellArmedAt
+        DispatchQueue.main.async { [weak self] in
+            guard let self, self.dwellViewPending, self.dwellArmedAt == armedAt else { return }
+            self.dwellViewPending = false
+            self.dwellView = UIFocusSystem.focusSystem(for: self.collectionView)?.focusedItem as? UIView
+        }
+    }
+
+    /// Focus landed on a tile: hide any revealed picture and start the hold for this one.
+    private func beginDwell(url: URL?, view tile: UIView?) {
+        cancelDwell()
+        if case .search = mode { return }
+        guard let url else { return }
+        dwellURL = url
+        dwellView = tile
+        dwellArmedAt = CACurrentMediaTime()
+        scheduleDwell(after: HomeWash.holdDelay)
+    }
+
+    private func scheduleDwell(after delay: TimeInterval) {
+        dwellWork?.cancel()
+        let work = DispatchWorkItem { [weak self] in self?.dwellFired() }
+        dwellWork = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: work)
+    }
+
+    /// Focus moved on, or the page is leaving: drop the hold and fade a revealed picture out.
+    private func cancelDwell() {
+        dwellWork?.cancel()
+        dwellWork = nil
+        dwellURL = nil
+        dwellView = nil
+        dwellViewPending = false
+        concealDwell()
+    }
+
+    /// The hold ran out. Reveals only if the page is still, focus is still on that tile and
+    /// nothing (preview carousel, detail page, player) covers the page.
+    private func dwellFired() {
+        dwellWork = nil
+        guard let url = dwellURL, let tile = dwellView else { return }
+        let wait = HomeWash.holdRemaining(now: CACurrentMediaTime(), armedAt: dwellArmedAt,
+                                          lastMotion: lastPageMotion)
+        if wait > 0.01 {
+            scheduleDwell(after: wait)
+            return
+        }
+        guard view.window != nil, presentedViewController == nil, isDrillInPage || heroCanAutoAdvance,
+              let focused = UIFocusSystem.focusSystem(for: collectionView)?.focusedItem as? UIView,
+              focused === tile
+        else { return }
+        washGeneration += 1
+        let generation = washGeneration
+        dwellOwnsWash = true
+        // The picture loads and decodes off the main thread; the fade starts once it is in place.
+        // Hidden wash: swap with no crossfade, so the hero's picture is never seen fading away.
+        ambientView.setAmbient(url: url, crossfade: ambientView.alpha > 0.01) { [weak self] in
+            guard let self, self.washGeneration == generation, self.dwellOwnsWash else { return }
+            self.dwellRevealed = true
+            let target = HomeWash.alpha(showcase: 0, hasHero: false, revealed: true)
+            UIView.animate(withDuration: HomeWash.revealDuration, delay: 0,
+                           options: [.beginFromCurrentState, .curveEaseInOut]) {
+                self.ambientView.alpha = target
+            }
+        }
+    }
+
+    /// Fades a revealed picture out, back to what the page shows at this scroll position.
+    private func concealDwell() {
+        guard dwellOwnsWash else { return }
+        let wasRevealed = dwellRevealed
+        dwellRevealed = false
+        washGeneration += 1
+        let generation = washGeneration
+        guard wasRevealed else {
+            // The picture was still loading and never showed.
+            finishConceal(generation)
+            return
+        }
+        let showcase = HeroBackdropView.showcasePercentage(collectionView.contentOffset.y,
+                                                           shelfTop: Self.heroBackdropFloor)
+        let target = HomeWash.alpha(showcase: showcase, hasHero: heroSectionIndex != nil, revealed: false)
+        UIView.animate(withDuration: HomeWash.concealDuration, delay: 0,
+                       options: [.beginFromCurrentState, .curveEaseOut], animations: {
+            self.ambientView.alpha = target
+        }, completion: { [weak self] _ in
+            self?.finishConceal(generation)
+        })
+    }
+
+    /// The held picture is out of sight: hand the wash back to the hero's picture.
+    private func finishConceal(_ generation: Int) {
+        guard washGeneration == generation, dwellOwnsWash else { return }
+        dwellOwnsWash = false
+        ambientView.setAmbient(url: heroAmbientURL, crossfade: ambientView.alpha > 0.01)
     }
 
     private func computeSections() -> [HomeSectionData] {
@@ -7949,6 +8091,18 @@ extension PlexHomeViewController: UICollectionViewDelegate {
         for case let heroCell as HeroOverlayCell in collectionView.visibleCells {
             heroCell.overlay.applyShowcase(showcase)
         }
+        // The wash: note that the page moved (a reveal waits for it to be still), fade a held
+        // tile's picture out and hold again for the same tile, then follow the hero.
+        if abs(offset - lastWashOffset) > 0.5 {
+            lastWashOffset = offset
+            lastPageMotion = CACurrentMediaTime()
+            if dwellRevealed {
+                concealDwell()
+                dwellArmedAt = lastPageMotion
+                scheduleDwell(after: HomeWash.holdDelay)
+            }
+        }
+        applyWashAlpha()
     }
 
     /// Centres the focused row vertically as focus moves.
@@ -7962,6 +8116,11 @@ extension PlexHomeViewController: UICollectionViewDelegate {
         // have not moved at all" — the two look identical from the press.
         if context.nextFocusedView !== context.previouslyFocusedView {
             engineMovedFocus = true
+        }
+        // Focus left the tile being held (a shelf row reports its own tiles through onFocusItem,
+        // before or after this runs; grid tiles start their hold below).
+        if !dwellViewPending, context.nextFocusedView !== dwellView {
+            cancelDwell()
         }
         // Resolve the section that owns the newly-focused view.
         guard let nextSectionIndex = focusedSectionIndex(in: context) else {
@@ -8047,6 +8206,7 @@ extension PlexHomeViewController: UICollectionViewDelegate {
             // `nextFocusedIndexPath` resolves at the collection level.
             if let indexPath = context.nextFocusedIndexPath {
                 scrollGridCellIntoView(at: indexPath)
+                beginGridDwell(at: indexPath, view: context.nextFocusedView)
             }
         case .watchlistGrid:
             // Same multi-row reason as the library grid, none of its A–Z or
@@ -8054,6 +8214,7 @@ extension PlexHomeViewController: UICollectionViewDelegate {
             // section's FIRST item, which pinned the page on row 1.
             if let indexPath = context.nextFocusedIndexPath {
                 scrollGridCellIntoView(at: indexPath)
+                beginGridDwell(at: indexPath, view: context.nextFocusedView)
             }
         default:
             // The first row under the hero collapses the hero to a FIXED,
@@ -8065,6 +8226,16 @@ extension PlexHomeViewController: UICollectionViewDelegate {
             scrollSectionToRest(sectionIndex: nextSectionIndex)
         }
         updateLeftEdgeGuide(for: context.nextFocusedIndexPath)
+    }
+
+    /// Focus landed on a grid tile (library grid, watchlist grid): start its hold.
+    private func beginGridDwell(at indexPath: IndexPath, view: UIView?) {
+        guard indexPath.section < sectionsSnapshot.count,
+              let item = sectionsSnapshot[indexPath.section].items[safe: indexPath.item],
+              !item.isGridPlaceholder
+        else { return }
+        let request = item.heroBackdropRequest()
+        beginDwell(url: request.backdropURL ?? request.thumbnailURL, view: view)
     }
 
     /// Re-aim the leading-edge `UIFocusGuide` based on the newly-focused
