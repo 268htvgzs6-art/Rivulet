@@ -5109,7 +5109,8 @@ final class PlexHomeViewController: UIViewController {
             var at = firstHubRow + Self.collectionsRowInsertionIndex(rows: hubRowKinds)
             let rows = Self.libraryPinRows(
                 pins: HomeCollectionPins.pins(in: .library), libraryUUID: libraryUUID,
-                hubKeys: Set((dataStore.libraryHubs[key] ?? []).compactMap(\.key)),
+                // Only Recently Added is drawn as a hub here, so no pin can repeat a row Plex shows.
+                hubKeys: [],
                 fetched: libraryPinItems)
             for row in rows {
                 let id = HomeSectionID(raw: "libraryPin:\(row.pin.ratingKey)")
@@ -7297,11 +7298,11 @@ extension PlexHomeViewController: UICollectionViewDelegate {
             promotedChildrenKeys: dataStore.promotedHubKeys(forLibraryKey: key),
             childrenKey: pin.childrenKey,
             isPinned: HomeCollectionPins.isPinned(ratingKey: pin.ratingKey, libraryUUID: libraryUUID))
-        // Library: always has a page to draw on; skipped when Plex already
-        // shows this collection as a hub here.
+        // Library: always has a page to draw on. The page draws no promoted hub
+        // (only Recently Added), so a pin never repeats one.
         let libraryAction = Self.collectionPinAction(
             isLibraryPinned: true,
-            promotedChildrenKeys: Set((dataStore.libraryHubs[key] ?? []).compactMap(\.key)),
+            promotedChildrenKeys: [],
             childrenKey: pin.childrenKey,
             isPinned: HomeCollectionPins.isPinned(ratingKey: pin.ratingKey, libraryUUID: libraryUUID, in: .library))
 
