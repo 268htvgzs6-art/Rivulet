@@ -25,7 +25,7 @@ Changes in 1.4:
 - Player: Up from a pane's tabs closes the pane, and Down with the controls up moves to the tabs
 - Skip pill: Up and Down land in the controls in one move
 
-Same license as upstream: [PolyForm Noncommercial 1.0.0](LICENSE). The fork carries no signing changes and no optional engine build options; build it and sign it with your own Apple ID, as described under Building below.
+Same license as upstream: [PolyForm Noncommercial 1.0.0](LICENSE). The fork carries no signing changes and no optional engine build options; to install it, set your own team, bundle identifiers and app group in Xcode and sign it with your own Apple ID. The build steps are under Building below.
 
 ---
 
