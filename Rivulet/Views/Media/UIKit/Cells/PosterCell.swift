@@ -504,7 +504,9 @@ final class PosterCell: UICollectionViewCell {
                 await RoundedPoster.image(for: url, shape: shape)
             }
             await MainActor.run {
-                guard let self, self.currentURL == url else { return }
+                // A cancelled load was replaced or reset: its nil must not paint the failure card
+                // over a newer load of the same poster.
+                guard let self, !Task.isCancelled, self.currentURL == url else { return }
                 if let image {
                     self.posterView.image = image
                     self.hasArtwork = true
@@ -826,6 +828,14 @@ final class PosterWatchedBadge: UIView {
     }
 
     required init?(coder: NSCoder) { fatalError() }
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        // With no path Core Animation derives the shadow from the pill's rendered contents,
+        // an offscreen pass per badge.
+        guard !pillBackground.bounds.isEmpty else { return }
+        pillBackground.layer.shadowPath = UIBezierPath(roundedRect: pillBackground.bounds, cornerRadius: 10).cgPath
+    }
 
     func setStyle(_ style: Style) {
         switch style {
