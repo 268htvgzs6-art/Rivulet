@@ -202,6 +202,8 @@ final class MediaDetailChromeView: UIView {
         return s
     }()
 
+    private let themeIndicator = ThemeMusicIndicatorView()
+
     // MARK: - Init
 
     override init(frame: CGRect) {
@@ -310,6 +312,12 @@ final class MediaDetailChromeView: UIView {
             actionRow.isUserInteractionEnabled = true
             isUserInteractionEnabled = true
         }
+        updateThemeIndicator()
+    }
+
+    /// Only the expanded detail is a show's page; the carousel card shows no indicator.
+    private func updateThemeIndicator() {
+        themeIndicator.show = mode == .expandedDetail ? item?.themeMusicShowRef : nil
     }
 
     /// Toggles button focusability without changing mode, so Up from the below-fold
@@ -416,6 +424,7 @@ final class MediaDetailChromeView: UIView {
         resolvedGenres = []
         genreRow.arrangedSubviews.forEach { $0.removeFromSuperview() }
         qualityRow.arrangedSubviews.forEach { $0.removeFromSuperview() }
+        updateThemeIndicator()
 
         guard let item = item else { return }
 
@@ -931,6 +940,8 @@ final class MediaDetailChromeView: UIView {
             qualityRow.addArrangedSubview(Self.makeBadge(badge, alpha: Self.qualityRowAlpha,
                                                          filled: MediaSource.filledBadges.contains(badge)))
         }
+        // Last, so the note trails the score and the badges.
+        qualityRow.addArrangedSubview(themeIndicator)
     }
 
     /// The score (glyph or source name, then value) and the Common Sense age with its green seal.
