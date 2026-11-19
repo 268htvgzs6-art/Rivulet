@@ -8173,6 +8173,7 @@
         }
       }
     },
+    "Episode Row" : {},
     "Episodes" : {
       "localizations" : {
         "de" : {
@@ -10116,6 +10117,7 @@
       }
     },
     "Host • %@" : {},
+    "How a show with more than one season lists them. Posters shows each season as a poster; choose one to see its episodes. Episode Row shows every episode in one row with the seasons above it." : {},
     "How far a single Left press skips back during playback." : {
       "localizations" : {
         "de" : {
@@ -17909,6 +17911,7 @@
         }
       }
     },
+    "Seasons" : {},
     "See this server's details. A server shared with you shows who owns it." : {
       "localizations" : {
         "de" : {

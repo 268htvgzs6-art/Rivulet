@@ -380,6 +380,23 @@ final class PosterCell: UICollectionViewCell {
         configureWatchedBadge(item: item)
     }
 
+    /// A season on its show's page: its own poster (a season tile elsewhere shows the show's),
+    /// its name in the top-left badge, and the show tile's unwatched count or watched glyph.
+    func configure(season: MediaItem, label: String) {
+        sourceBadge?.text = nil
+        setSquare(false)
+        failureTitleText = label
+        setEdition(nil)
+        loadImage(from: season.artwork.poster ?? season.parentArtwork?.poster, failureKind: .season)
+        hideProgressBar()
+        switch SeasonPosterStyle.mark(progress: season.childProgress, isPlayed: season.userState.isPlayed) {
+        case .unwatched(let count): showUnwatchedCount(count)
+        case .watched: showWatchedGlyph()
+        case .hidden: hideWatchedIndicators()
+        }
+        setSourceBadge(label)
+    }
+
     /// Names the item's server; call after `configure` (which never adds one).
     func setSourceBadge(_ text: String?) {
         guard let text else { sourceBadge?.text = nil; return }
