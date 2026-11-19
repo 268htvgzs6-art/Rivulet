@@ -1,9 +1,10 @@
-## About this fork (1.4.1)
+## About this fork (1.5)
 
 This is a community fork of [l984-451/Rivulet](https://github.com/l984-451/Rivulet), based on Rivulet 1.3.1 (129). It is not affiliated with or endorsed by Rivulet's author, and the upstream repository remains the official app. Each change is its own commit, so it can be offered upstream on its own.
 
-Changes in 1.4.1:
+Changes in 1.5:
 
+- Theme music: a TV show's theme tune plays once, quietly, on its show, season and episode pages, with Theme Music and Theme Music Volume in Settings > Appearance (tvOS, Plex servers)
 - Home: the background is dark once focus leaves the hero, and resting on a tile for two seconds fades the rest of the page out for that title's backdrop
 - Fast Up and Down runs on Home no longer brake on every press
 - Detail, season and person pages, the music queue and held-arrow scrolling are timed to the displayed frame

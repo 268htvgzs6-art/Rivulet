@@ -155,8 +155,10 @@ struct WhatsNewView: View {
     // MARK: - Changelog Data
 
     static let changelogs: [(version: String, features: [String])] = [
-        ("1.4.1 (131)", [
+        ("1.5 (132)", [
             "> This is a community fork of Rivulet, not an official Rivulet release. Changes since 1.4 (130) are below.",
+            "New: a TV show's theme tune plays quietly on its page, and stops when you leave or start playing (Plex servers)",
+            "Turn it off or set its volume in Settings > Appearance > Theme Music",
             "Home: the background goes dark once you move down from the featured title",
             "Rest on a poster for two seconds: the page fades away to its wide picture, with only that poster left",
             "Fast Up and Down runs on Home no longer brake a little on every press",
