@@ -155,7 +155,7 @@ struct WhatsNewView: View {
     // MARK: - Changelog Data
 
     static let changelogs: [(version: String, features: [String])] = [
-        ("1.5 (133)", [
+        ("1.5 (134)", [
             "> This is a community fork of Rivulet, not an official Rivulet release. Changes since 1.4 (130) are below.",
             "New: a TV show's theme tune plays quietly on its page, and stops when you leave or start playing (Plex servers)",
             "Turn it off or set its volume in Settings > Appearance > Theme Music",
@@ -164,6 +164,7 @@ struct WhatsNewView: View {
             "New: anime shows its MyAnimeList score beside IMDb, read from a file inside the app (in builds that include the scores file)",
             "The IMDb mark is drawn as the old ticket stub",
             "Privacy: lookups to outside services are off unless you turn them on in Settings > About > Privacy",
+            "New: a Skip button left alone on screen is selected for 3 seconds, so one click skips; after that a click shows the play bar as usual",
             "Home: the background goes dark once you move down from the featured title",
             "Rest on a poster for two seconds: the page fades away to its wide picture, with only that poster left",
             "Poster Spotlight in Settings > Appearance turns the picture behind a held poster off, or sets how long to wait",

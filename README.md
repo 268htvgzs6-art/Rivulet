@@ -11,6 +11,7 @@ Changes in 1.5:
 - Season posters: a show with two or more seasons lists them as posters that open the season page; Settings > Appearance > Seasons switches back to the episode row (tvOS)
 - Anime: a MyAnimeList score beside the rating on anime pages, read from a scores file bundled at build time. The file is not in the repository, so a build without it shows nothing (tvOS)
 - The IMDb mark is drawn as a ticket stub
+- Player: a Skip Intro / Skip Credits button holds focus for 3 seconds after the controls or the seek bar hide, then hands it back to the video; the button stays on screen (tvOS)
 - Privacy: the developer's online extras, Plex's online age guidance and Plex's online actor details are off unless switched on in Settings > About > Privacy (switches on tvOS; off on iOS and Mac)
 - Fast Up and Down runs on Home no longer brake on every press
 - Detail, season and person pages, the music queue and held-arrow scrolling are timed to the displayed frame
