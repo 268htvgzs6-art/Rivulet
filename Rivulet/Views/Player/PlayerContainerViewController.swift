@@ -628,6 +628,11 @@ class PlayerContainerViewController: UIViewController {
     private var blockNextDismiss = false
     private var blockDismissResetWorkItem: DispatchWorkItem?
 
+    /// When the skip's bar alone last went away, so a Menu during its fade-out still only closes it.
+    private var skipBarHiddenAt: CFTimeInterval = 0
+    private var skipBarWasShown = false
+    private static let skipBarMenuGrace: CFTimeInterval = 0.6
+
     override func pressesBegan(_ presses: Set<UIPress>, with event: UIPressesEvent?) {
         restartPaneIdleTimer()
         for press in presses {
@@ -1036,6 +1041,16 @@ class PlayerContainerViewController: UIViewController {
             return
         }
 
+        // A skip with the controls hidden shows the bar alone for 3.3 s: Menu closes it, never the
+        // player. Also for a moment after it timed out, while it is still fading (fork).
+        if !vm.showControls, !vm.isScrubbing,
+           vm.showsSkipBar || CACurrentMediaTime() - skipBarHiddenAt < Self.skipBarMenuGrace {
+            vm.hideSkipBar()
+            skipBarHiddenAt = 0
+            blockDismissTemporarily()
+            return
+        }
+
         if inputCoordinator.target == nil {
             if vm.isScrubbing {
                 vm.cancelScrub()
@@ -1433,7 +1448,12 @@ class PlayerContainerViewController: UIViewController {
             .store(in: &cancellables)
         vm.$showsSkipBar
             .receive(on: DispatchQueue.main)
-            .sink { [weak self] _ in self?.applyChromeVisibility() }
+            .sink { [weak self] shows in
+                guard let self else { return }
+                if !shows, self.skipBarWasShown { self.skipBarHiddenAt = CACurrentMediaTime() }
+                self.skipBarWasShown = shows
+                self.applyChromeVisibility()
+            }
             .store(in: &cancellables)
         vm.$compatibilityNotice
             .removeDuplicates()

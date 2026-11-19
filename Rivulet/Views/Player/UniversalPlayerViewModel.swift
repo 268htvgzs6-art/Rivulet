@@ -4625,6 +4625,14 @@ final class UniversalPlayerViewModel: ObservableObject, WatchTogetherPlayer {
         }
     }
 
+    /// Menu on the skip's bar alone: it goes at once instead of waiting out its 3.3 s (fork).
+    func hideSkipBar() {
+        seekIndicatorTimer?.invalidate()
+        seekIndicatorTimer = nil
+        seekIndicator = nil
+        showsSkipBar = false
+    }
+
     // MARK: - Scrubbing
 
     /// Start or advance scrub speed in given direction via ShuttleGrammar:
