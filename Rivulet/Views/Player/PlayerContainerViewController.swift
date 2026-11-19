@@ -628,10 +628,17 @@ class PlayerContainerViewController: UIViewController {
     private var blockNextDismiss = false
     private var blockDismissResetWorkItem: DispatchWorkItem?
 
-    /// When the skip's bar alone last went away, so a Menu during its fade-out still only closes it.
-    private var skipBarHiddenAt: CFTimeInterval = 0
-    private var skipBarWasShown = false
-    private static let skipBarMenuGrace: CFTimeInterval = 0.6
+    /// The last bar on screen was a skip's bar alone, not the controls (set in applyChromeVisibility).
+    private var skipBarWasAlone = false
+
+    /// A skip's bar alone is on screen: up, or still fading out (what the bar's layer draws now).
+    /// Back then closes it and never leaves the player (fork).
+    private var skipBarOnScreen: Bool {
+        guard let vm = viewModel, !vm.showControls, !vm.isScrubbing else { return false }
+        guard let bar = progressBar else { return false }
+        if vm.showsSkipBar, bar.alpha > 0.5 { return true }
+        return skipBarWasAlone && (bar.layer.presentation()?.opacity ?? 0) > 0.05
+    }
 
     override func pressesBegan(_ presses: Set<UIPress>, with event: UIPressesEvent?) {
         restartPaneIdleTimer()
@@ -1041,12 +1048,11 @@ class PlayerContainerViewController: UIViewController {
             return
         }
 
-        // A skip with the controls hidden shows the bar alone for 3.3 s: Menu closes it, never the
-        // player. Also for a moment after it timed out, while it is still fading (fork).
-        if !vm.showControls, !vm.isScrubbing,
-           vm.showsSkipBar || CACurrentMediaTime() - skipBarHiddenAt < Self.skipBarMenuGrace {
+        // A skip with the controls hidden shows the bar alone for 3.3 s: Back closes it, also while
+        // it fades out, and never leaves the player then. With nothing on screen Back leaves the
+        // video as before (fork).
+        if skipBarOnScreen {
             vm.hideSkipBar()
-            skipBarHiddenAt = 0
             blockDismissTemporarily()
             return
         }
@@ -1448,12 +1454,7 @@ class PlayerContainerViewController: UIViewController {
             .store(in: &cancellables)
         vm.$showsSkipBar
             .receive(on: DispatchQueue.main)
-            .sink { [weak self] shows in
-                guard let self else { return }
-                if !shows, self.skipBarWasShown { self.skipBarHiddenAt = CACurrentMediaTime() }
-                self.skipBarWasShown = shows
-                self.applyChromeVisibility()
-            }
+            .sink { [weak self] _ in self?.applyChromeVisibility() }
             .store(in: &cancellables)
         vm.$compatibilityNotice
             .removeDuplicates()
@@ -2400,6 +2401,8 @@ class PlayerContainerViewController: UIViewController {
             && !ambient && vm.postVideoState == .hidden
         // A skip with the controls hidden shows the bar alone, as AVKit does.
         let railVisible = chromeVisible && vm.showControls && !vm.isScrubbing
+        // Which bar was up last decides what Back does while it fades out (fork).
+        if chromeVisible { skipBarWasAlone = vm.showsSkipBar && !vm.showControls && !vm.isScrubbing }
         if !chromeVisible { progressBar?.clearSkipIndicator() }
 
         // Every appearance of the rail starts on the scrubber; focus memory
