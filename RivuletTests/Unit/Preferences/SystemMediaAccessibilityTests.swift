@@ -24,7 +24,7 @@ final class SystemMediaAccessibilityTests: XCTestCase {
     func test_captionsAlwaysOn_overridesTheStoredIntent() {
         XCTAssertEqual(TrackIntentStore.effectiveSubtitleIntent(stored: .off, captionsAlwaysOn: false), .off)
         XCTAssertEqual(TrackIntentStore.effectiveSubtitleIntent(stored: .off, captionsAlwaysOn: true),
-                       .track(language: TrackLanguage.device, forced: false, hearingImpaired: true, codec: nil))
+                       .track(language: TrackIntentStore.defaultSubtitleLanguage, forced: false, hearingImpaired: true, codec: nil))
         XCTAssertEqual(
             TrackIntentStore.effectiveSubtitleIntent(
                 stored: .foreignAudio(language: "spa", hearingImpaired: false), captionsAlwaysOn: true),

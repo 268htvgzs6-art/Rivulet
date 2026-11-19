@@ -43,16 +43,17 @@ nonisolated struct MediaRating: Sendable, Hashable {
         return unique.filter { !(named && $0.source == .unknown) }.sorted { $0.source < $1.source }
     }
 
-    /// The detail row's one score (Settings > Appearance > Rating); Rotten Tomatoes when the
-    /// title lacks the chosen source, and the server's unnamed score (Jellyfin and Emby's
-    /// community rating) when it has neither. The raw value is stored, so 0 (unset) is Rotten Tomatoes.
+    /// The detail row's one score (Settings > Appearance > Rating), else the server's unnamed
+    /// score (Jellyfin and Emby's community rating). No other source stands in (fork): a title
+    /// without an IMDb score shows none rather than Rotten Tomatoes. The raw value is stored;
+    /// unset is IMDb (fork).
     static let detailSourceKey = "detailRatingSource"
     static var detailSource: Source {
-        Source(rawValue: UserDefaults.standard.integer(forKey: detailSourceKey)) ?? .rottenTomatoes
+        guard let raw = UserDefaults.standard.object(forKey: detailSourceKey) as? Int else { return .imdb }
+        return Source(rawValue: raw) ?? .imdb
     }
     static func detailRating(in ratings: [MediaRating]) -> MediaRating? {
         ratings.first { $0.source == detailSource }
-            ?? ratings.first { $0.source == .rottenTomatoes }
             ?? ratings.first { $0.source == .unknown }
     }
 

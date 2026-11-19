@@ -140,6 +140,7 @@ enum TrackLanguage {
     }
 
     static let english = "eng"
+    static let arabic = "ara"
 
     /// Audio intent sentinel: the file's main (default) track, whatever its language.
     static let original = "original"
@@ -301,7 +302,10 @@ enum TrackIntentResolver {
             return nil
 
         case let .foreignAudio(language, hearingImpaired):
+            // English audio counts as not foreign either (fork): with Arabic subtitles, an
+            // English title plays without them and a Japanese one gets them.
             if TrackLanguage.isForeign(audioLanguage, to: language),
+               TrackLanguage.isForeign(audioLanguage, to: TrackLanguage.english),
                let full = resolveSubtitle(intent: .track(language: language, forced: false,
                                                          hearingImpaired: hearingImpaired, codec: nil), in: tracks) {
                 return full
@@ -501,8 +505,11 @@ enum TrackIntentStore {
         storedData(subtitleKey)?.isEmpty == false
     }
 
-    /// What playback resolves against: Foreign Audio in the device's
-    /// language when nothing is stored.
+    /// The subtitle language when nothing names one (fork): Arabic, not the device's.
+    static let defaultSubtitleLanguage = TrackLanguage.arabic
+
+    /// What playback resolves against: Foreign Audio in `defaultSubtitleLanguage`
+    /// when nothing is stored.
     static var effectiveSubtitleIntent: SubtitleIntent {
         effectiveSubtitleIntent(stored: subtitleIntent, captionsAlwaysOn: SystemMediaAccessibility.captionsAlwaysOn)
     }
@@ -510,9 +517,9 @@ enum TrackIntentStore {
     /// The system's Closed Captions + SDH turns full subtitles on, SDH first, in the saved language.
     static func effectiveSubtitleIntent(stored: SubtitleIntent?, captionsAlwaysOn: Bool) -> SubtitleIntent {
         guard captionsAlwaysOn else {
-            return stored ?? .foreignAudio(language: TrackLanguage.device, hearingImpaired: false)
+            return stored ?? .foreignAudio(language: defaultSubtitleLanguage, hearingImpaired: false)
         }
-        return .track(language: stored?.language ?? TrackLanguage.device, forced: false,
+        return .track(language: stored?.language ?? defaultSubtitleLanguage, forced: false,
                       hearingImpaired: true, codec: nil)
     }
 
@@ -721,9 +728,9 @@ enum SubtitleMode: String, CaseIterable {
 }
 
 extension TrackIntentStore {
-    /// The subtitle language Settings shows, the device's when nothing names one.
+    /// The subtitle language Settings shows, `defaultSubtitleLanguage` when nothing names one.
     static var subtitleLanguage: String {
-        effectiveSubtitleIntent.language ?? TrackLanguage.device
+        effectiveSubtitleIntent.language ?? defaultSubtitleLanguage
     }
 
     static var subtitleSDH: Bool {

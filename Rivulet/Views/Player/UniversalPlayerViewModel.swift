@@ -393,7 +393,7 @@ final class UniversalPlayerViewModel: ObservableObject, WatchTogetherPlayer {
     /// What the menu's On turns on: the showing track, else the saved language's full track.
     var subtitleOnTrackId: Int? {
         if let currentSubtitleTrackId { return currentSubtitleTrackId }
-        let language = TrackIntentStore.effectiveSubtitleIntent.language ?? TrackLanguage.device
+        let language = TrackIntentStore.effectiveSubtitleIntent.language ?? TrackIntentStore.defaultSubtitleLanguage
         let full = SubtitleIntent.track(language: language, forced: false, hearingImpaired: false, codec: nil)
         return TrackIntentResolver.resolveSubtitle(intent: full, in: subtitleTracks)?.id
             ?? subtitleTracks.first { !$0.isForced }?.id

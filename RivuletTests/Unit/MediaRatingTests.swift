@@ -109,7 +109,7 @@ final class MediaRatingTests: XCTestCase {
 
     // MARK: Detail row
 
-    /// The chosen source, then Rotten Tomatoes, then the server's unnamed score.
+    /// The chosen source, then the server's unnamed score; Rotten Tomatoes never stands in (fork).
     func test_detailRating_fallsBackToServerScore() {
         let key = MediaRating.detailSourceKey
         let saved = UserDefaults.standard.object(forKey: key)
@@ -120,7 +120,8 @@ final class MediaRatingTests: XCTestCase {
         let tomatoes = MediaRating(8.9, source: .rottenTomatoes)
         let imdb = MediaRating(7.6, source: .imdb)
         XCTAssertEqual(MediaRating.detailRating(in: MediaRating.ordered([community, imdb]))?.source, .imdb)
-        XCTAssertEqual(MediaRating.detailRating(in: MediaRating.ordered([community, tomatoes]))?.source, .rottenTomatoes)
+        XCTAssertEqual(MediaRating.detailRating(in: MediaRating.ordered([community, tomatoes]))?.source, .unknown)
+        XCTAssertNil(MediaRating.detailRating(in: [tomatoes]))
         // Jellyfin and Emby with no critic score: their community rating, as their own web apps show it.
         XCTAssertEqual(MediaRating.detailRating(in: MediaRating.ordered([community]))?.value, 7.8)
         XCTAssertNil(MediaRating.detailRating(in: []))

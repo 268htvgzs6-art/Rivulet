@@ -121,7 +121,7 @@ enum SkipInterval: Int, CaseIterable, CustomStringConvertible {
     static let storageKey = SkipLengthKeys.forward
     /// Backs Skip Back Length; unset means "same as forward".
     static let backStorageKey = SkipLengthKeys.back
-    static let defaultValue: SkipInterval = .thirtySeconds
+    static let defaultValue: SkipInterval = .fifteenSeconds  // fork: 15 s both ways
 
     var description: String { String(localized: "\(rawValue) seconds") }
 }
