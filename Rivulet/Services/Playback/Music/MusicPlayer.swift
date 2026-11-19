@@ -64,6 +64,7 @@ final class MusicPlayer: ObservableObject {
 
     /// Load and play an audio URL. `useEngine` sends it to AetherEngine, for codecs AVPlayer cannot decode.
     func load(url: URL, headers: [String: String], useEngine: Bool = false) {
+        ThemeMusic.shared.stopForVideo()
         cleanUp()
 
         // Configure audio session

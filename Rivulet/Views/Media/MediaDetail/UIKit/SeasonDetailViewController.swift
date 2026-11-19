@@ -132,11 +132,13 @@ final class SeasonDetailViewController: UIViewController, UICollectionViewDelega
     override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
         themeVideo.setActive(true)
+        ThemeMusic.shared.refresh()
     }
 
     override func viewWillDisappear(_ animated: Bool) {
         super.viewWillDisappear(animated)
         themeVideo.setActive(false)
+        ThemeMusic.shared.refresh()
     }
 
     override var preferredFocusEnvironments: [UIFocusEnvironment] {
@@ -590,4 +592,10 @@ enum EpisodeMenu {
             host.present(TileMenuPopupViewController(sections: sections, sourceFrame: sourceFrame), animated: false)
         }
     }
+}
+
+// MARK: - Theme music
+
+extension SeasonDetailViewController: ThemeMusicPage {
+    var themeMusicShow: MediaItemRef? { season.themeMusicShowRef }
 }
