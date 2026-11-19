@@ -31,6 +31,7 @@ final class HeroButtonRowView: UIView {
     var canAdvance: Bool = false {
         didSet {
             nextButton.isHidden = !canAdvance
+            setSecondaryButtonsFocusable(focusInside)
         }
     }
 
@@ -115,7 +116,7 @@ final class HeroButtonRowView: UIView {
         stack.addArrangedSubview(nextButton)
         nextButton.isHidden = true
         // Gated until focus actually enters the hero, so a directional entry
-        // from the rows can only land on Play.
+        // from the rows can only land on the landing button (Next, else Play).
         setSecondaryButtonsFocusable(false)
 
         addSubview(stack)
@@ -148,20 +149,28 @@ final class HeroButtonRowView: UIView {
 
     override var canBecomeFocused: Bool { false }
 
-    /// Default focus target is Play; if Play is hidden (never, but defensive)
-    /// fall back to Watchlist.
+    /// Focus lands on Next while there is a next item (fork), so browsing the hero is one press
+    /// away and Play is a few Lefts back; with a single item, on Play. If Play is hidden (never,
+    /// but defensive), on Watchlist.
     override var preferredFocusEnvironments: [UIFocusEnvironment] {
+        if !nextButton.isHidden { return [nextButton] }
         if !playButton.isHidden { return [playButton] }
         if !watchlistButton.isHidden { return [watchlistButton] }
         return super.preferredFocusEnvironments
     }
 
-    /// Land-on-Play gate: `preferredFocusEnvironments` does not redirect a directional entry, so
-    /// the secondary buttons stay unfocusable until focus is inside the hero.
+    /// Whether focus is inside the hero (the last `setSecondaryButtonsFocusable` call).
+    private var focusInside = false
+
+    /// Landing gate: `preferredFocusEnvironments` does not redirect a directional entry, so until
+    /// focus is inside the hero only the landing button (Next, else Play) is focusable.
     func setSecondaryButtonsFocusable(_ on: Bool) {
+        focusInside = on
+        let landsOnNext = !nextButton.isHidden
+        playButton.isFocusEnabled = on || !landsOnNext
         watchlistButton.isFocusEnabled = on
         infoButton.isFocusEnabled = on
-        nextButton.isFocusEnabled = on
+        nextButton.isFocusEnabled = on || landsOnNext
     }
 
     func setPagingVisible(_ visible: Bool, animated: Bool = true) {
@@ -368,8 +377,8 @@ final class HeroPillButton: UIControl {
     // MARK: - Focus
 
     /// Focus gate: false removes the button from focus candidacy entirely
-    /// (see HeroButtonRowView.setSecondaryButtonsFocusable). Play is never
-    /// gated; the secondary circles are gated while focus is outside the hero.
+    /// (see HeroButtonRowView.setSecondaryButtonsFocusable). While focus is outside
+    /// the hero only the landing button (Next, else Play) stays focusable.
     var isFocusEnabled = true
 
     override var canBecomeFocused: Bool { isFocusEnabled }
@@ -503,8 +512,8 @@ final class HeroCircleButton: UIControl {
     // MARK: - Focus
 
     /// Focus gate: false removes the button from focus candidacy entirely
-    /// (see HeroButtonRowView.setSecondaryButtonsFocusable). Play is never
-    /// gated; the secondary circles are gated while focus is outside the hero.
+    /// (see HeroButtonRowView.setSecondaryButtonsFocusable). While focus is outside
+    /// the hero only the landing button (Next, else Play) stays focusable.
     var isFocusEnabled = true
 
     override var canBecomeFocused: Bool { isFocusEnabled }

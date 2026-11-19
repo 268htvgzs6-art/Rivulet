@@ -233,7 +233,7 @@ final class HeroOverlayView: UIView {
             focusInHero = nextInside
             updateAutoAdvanceTimer()
         }
-        // Land-on-Play gate: secondary buttons are focus candidates only
+        // Landing gate: the other buttons are focus candidates only
         // while focus lives inside the hero (see
         // HeroButtonRowView.setSecondaryButtonsFocusable).
         buttonRow.setSecondaryButtonsFocusable(nextInside)
@@ -645,7 +645,7 @@ final class MediaItemHeroOverlayView: UIView {
     override func didUpdateFocus(in context: UIFocusUpdateContext,
                                  with coordinator: UIFocusAnimationCoordinator) {
         super.didUpdateFocus(in: context, with: coordinator)
-        // Land-on-Play gate: secondary buttons are focus candidates only
+        // Landing gate: the other buttons are focus candidates only
         // while focus lives inside the hero (see
         // HeroButtonRowView.setSecondaryButtonsFocusable).
         let nextInside = context.nextFocusedView?.isDescendant(of: self) == true
