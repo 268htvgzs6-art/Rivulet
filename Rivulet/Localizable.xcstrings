@@ -3285,6 +3285,8 @@
         }
       }
     },
+    "Asks Plex's online service for an actor's biography and Known For titles when you open their page. Off shows only what is on your own server." : {},
+    "Asks Plex's online service for the full age guidance of each title you open, which tells Plex the title. Off shows only what your own server holds." : {},
     "Asks you to press a few buttons and records what your remote sent, for Rivulet's diagnostics. Nothing about what you watch is included." : {
       "localizations" : {
         "de" : {
@@ -7031,6 +7033,7 @@
         }
       }
     },
+    "Developer's Online Extras" : {},
     "Diagnostics Sent" : {
       "localizations" : {
         "de" : {
@@ -8882,6 +8885,7 @@
         }
       }
     },
+    "Extra ratings, title logos, Discover, trivia and scores from the app developer's servers, which see each title you open. A self-built copy cannot use them, so leave this off." : {},
     "Extras" : {
       "localizations" : {
         "de" : {
@@ -15050,6 +15054,9 @@
         }
       }
     },
+    "Plex Online Actor Details" : {},
+    "Plex Online Age Guidance" : {},
+    "Privacy" : {},
     "The server can't find this video's file. It may have been moved or deleted." : {
       "localizations" : {
         "de" : {

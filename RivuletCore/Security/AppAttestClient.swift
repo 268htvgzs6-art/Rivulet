@@ -164,6 +164,8 @@ actor AppAttestClient {
     }
 
     private func enroll() async -> String? {
+        // Enrolling asks the Worker for a challenge by itself; not while the lookups are off.
+        guard OutsideLookups.developer else { return nil }
         var step = "generateKey"
         do {
             let newKeyId = try await service.generateKey()

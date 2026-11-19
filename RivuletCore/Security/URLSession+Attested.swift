@@ -20,6 +20,9 @@ extension URLSession {
     /// On real hardware an unsigned request fails here instead of going out: both
     /// Workers enforce attestation, so it could only come back 401.
     func attestedData(for request: URLRequest) async throws -> (Data, URLResponse) {
+        // Off unless the owner turns it on: nothing is signed, enrolled or sent. The error is
+        // the one an unsignable request already gets, so every caller fails soft the same way.
+        guard OutsideLookups.developer else { throw URLError(.userAuthenticationRequired) }
         let client = AppAttestClient.shared
         let signed = await client.attest(request)
         if client.isSupported && !AppAttestClient.isSigned(signed) {
