@@ -1,6 +1,14 @@
-## About this fork (1.5)
+## About this fork (1.6)
 
 This is a community fork of [l984-451/Rivulet](https://github.com/l984-451/Rivulet), based on Rivulet 1.3.1 (129). It is not affiliated with or endorsed by Rivulet's author, and the upstream repository remains the official app. Each change is its own commit, so it can be offered upstream on its own.
+
+Changes in 1.6:
+
+- Scrolling: up and down on Home, libraries, Search and the detail, season and person pages use the system's own focus scrolling (upstream #631); sideways rows keep the fork's spring (tvOS)
+- Player: the first Down shows the play bar, and the next Down opens the Info pane; Back on the bar a skip shows closes it instead of leaving the video (tvOS)
+- Home: the featured title's buttons start on Next, so one click moves to the next title (tvOS)
+- Defaults: 15 second skips both ways, Arabic subtitles when the audio is not English, and IMDb on the detail page's rating row, applied once over earlier settings. Rotten Tomatoes no longer stands in for a missing IMDb score
+- From upstream 1.3.1: Dolby Vision stays on with any audio track, Plex works over the LAN when plex.tv is down, playback falls back between the original file and a transcode, AetherEngine 7.69.0, Up Next with Countdown Off, Live TV freezes fixed, aspect ratio in Information, Unwatched counts episodes, Top Shelf episode names, a grid keyboard for Search, Stereo with Subwoofer, loudness levelling, skip-back subtitle limits, a redacted profile PIN in error reports, and Jellyfin and Emby fixes
 
 Changes in 1.5:
 

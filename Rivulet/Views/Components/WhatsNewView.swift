@@ -155,6 +155,24 @@ struct WhatsNewView: View {
     // MARK: - Changelog Data
 
     static let changelogs: [(version: String, features: [String])] = [
+        ("1.6 (136)", [
+            "> This is a community fork of Rivulet, not an official Rivulet release. Changes since 1.5 (135) are below.",
+            "Scrolling up and down now uses the Apple TV's own motion, on Home, libraries, Search and every detail page",
+            "Player: the first Down shows the play bar, and a second Down opens Info",
+            "Player: Back while the bar from a skip is showing closes it, instead of leaving the video",
+            "Home: the featured title starts on its Next arrow, so one click shows the next title",
+            "Skips are 15 seconds both ways",
+            "Subtitles: Arabic when the audio is not English",
+            "Detail pages show the IMDb score, and Rotten Tomatoes no longer takes its place when IMDb has none",
+            "Dolby Vision stays on whichever audio track you pick",
+            "Plex keeps working over your home network when plex.tv is down",
+            "If a file or a converted stream fails, the other one plays instead",
+            "Live TV no longer freezes on big channel lists, and What's On shows every channel in a group",
+            "Information shows the picture's aspect ratio",
+            "Stereo with Subwoofer for 2.1 speakers, and optional loudness levelling for music",
+            "A grid keyboard in Search for remotes without a touch surface",
+            "Jellyfin and Emby: libraries stay off Home when the server says so, cast lists and a rating score",
+        ]),
         ("1.5 (135)", [
             "> This is a community fork of Rivulet, not an official Rivulet release. Changes since 1.4 (130) are below.",
             "New: a TV show's theme tune plays quietly on its page, and stops when you leave or start playing (Plex servers)",
