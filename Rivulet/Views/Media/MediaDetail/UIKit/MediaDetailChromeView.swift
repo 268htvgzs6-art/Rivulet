@@ -1038,27 +1038,44 @@ final class MediaDetailChromeView: UIView {
         }
     }
 
-    /// IMDb's yellow badge, drawn in code: "IMDb" in black heavy condensed type on a #F5C518
-    /// rounded rectangle. Its height is the caption font's cap height x 1.25, which lands on the
-    /// row's 22pt badge height, with the word's caps centred on it.
+    /// IMDb's badge in the old ticket style, drawn in code: "IMDb" in black heavy condensed type
+    /// on a gold ticket stub, three small bites out of each side like a ticket's perforation. Its
+    /// height is the caption font's cap height x 1.25, which lands on the row's 22pt badge
+    /// height, with the word's caps centred on it.
     private static let imdbBadge = wordBadge(
-        "IMDb", fill: UIColor(red: 0xF5 / 255.0, green: 0xC5 / 255.0, blue: 0x18 / 255.0, alpha: 1), ink: .black)
+        "IMDb", fill: UIColor(red: 0xF5 / 255.0, green: 0xC5 / 255.0, blue: 0x18 / 255.0, alpha: 1), ink: .black,
+        ticket: true)
 
     /// "MAL" in white on MyAnimeList's blue (#2E51A2), drawn in code like the IMDb one.
     private static let malBadge = wordBadge(
-        "MAL", fill: UIColor(red: 0x2E / 255.0, green: 0x51 / 255.0, blue: 0xA2 / 255.0, alpha: 1), ink: .white)
+        "MAL", fill: UIColor(red: 0x2E / 255.0, green: 0x51 / 255.0, blue: 0xA2 / 255.0, alpha: 1), ink: .white,
+        ticket: false)
 
     /// The shared drawing: a word in heavy condensed type on a rounded rectangle of `fill`.
-    private static func wordBadge(_ word: String, fill: UIColor, ink: UIColor) -> UIImage {
+    /// `ticket` bites three half-circles out of each side, and widens the badge to keep the word clear of them.
+    private static func wordBadge(_ word: String, fill: UIColor, ink: UIColor, ticket: Bool) -> UIImage {
         let height = (captionFont.capHeight * 1.25).rounded()
         let textFont = UIFont.systemFont(ofSize: (height * 0.66).rounded(), weight: .black, width: .condensed)
         let text = word as NSString
         let attributes: [NSAttributedString.Key: Any] = [.font: textFont, .foregroundColor: ink]
         let textWidth = text.size(withAttributes: attributes).width
-        let size = CGSize(width: (textWidth + height * 0.5).rounded(.up), height: height)
-        return UIGraphicsImageRenderer(size: size).image { _ in
+        let padding = height * (ticket ? 0.8 : 0.5)
+        let size = CGSize(width: (textWidth + padding).rounded(.up), height: height)
+        return UIGraphicsImageRenderer(size: size).image { context in
             fill.setFill()
             UIBezierPath(roundedRect: CGRect(origin: .zero, size: size), cornerRadius: height * 0.18).fill()
+            if ticket {
+                // Erase the bites: circles centred on the two side edges.
+                let bite = height * 0.1
+                context.cgContext.setBlendMode(.clear)
+                for step in 1...3 {
+                    let y = height * CGFloat(step) / 4
+                    for x in [CGFloat(0), size.width] {
+                        context.cgContext.fillEllipse(in: CGRect(x: x - bite, y: y - bite, width: bite * 2, height: bite * 2))
+                    }
+                }
+                context.cgContext.setBlendMode(.normal)
+            }
             // The baseline that puts the top of the caps at (height - capHeight) / 2.
             let baseline = (height + textFont.capHeight) / 2
             text.draw(at: CGPoint(x: (size.width - textWidth) / 2, y: baseline - textFont.ascender),
