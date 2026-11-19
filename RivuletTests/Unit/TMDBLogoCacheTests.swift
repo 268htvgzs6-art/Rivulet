@@ -20,9 +20,12 @@ final class TMDBLogoCacheTests: XCTestCase {
         TMDBMockURLProtocol.hitCounts = [:]
         tempDir = FileManager.default.temporaryDirectory
             .appendingPathComponent("TMDBLogoCacheTests-\(UUID().uuidString)", isDirectory: true)
+        // The developer lookups are off by default; these tests exercise the request path.
+        UserDefaults.standard.set(true, forKey: OutsideLookups.developerKey)
     }
 
     override func tearDown() {
+        UserDefaults.standard.removeObject(forKey: OutsideLookups.developerKey)
         URLProtocol.unregisterClass(TMDBMockURLProtocol.self)
         try? FileManager.default.removeItem(at: tempDir)
         super.tearDown()

@@ -1693,7 +1693,8 @@ enum SettingsContent {
         let short = (Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String) ?? "1.0"
         let build = (Bundle.main.infoDictionary?["CFBundleVersion"] as? String) ?? "1"
         let version = "\(short) (\(build))"
-        return [
+        // Typed, and joined to the Privacy rows below, so the literal stays quick to type-check.
+        let rows: [SettingsRowItem] = [
             SettingsRowItem(id: "about_version", title: "Version", kind: .info(value: { version })),
             SettingsRowItem(id: "changelog", title: "Changelog", kind: .action(destructive: false, handler: { vc in
                 presentChangelog(on: vc)
@@ -1735,6 +1736,24 @@ enum SettingsContent {
                     vc.present(popup, animated: true)
                 }
             }), isBusy: { DiagnosticsReport.isSending })
+        ]
+        return rows + privacyRows
+    }
+
+    /// Lookups that name a title or person to an outside service. All off until turned on here;
+    /// each is read where its request is made (`OutsideLookups`).
+    private static var privacyRows: [SettingsRowItem] {
+        [
+            .header("Privacy"),
+            SettingsRowItem(id: "outsideDeveloper", title: "Developer's Online Extras",
+                            kind: .toggle(get: { OutsideLookups.developer },
+                                          set: { OutsideLookups.developer = $0 })),
+            SettingsRowItem(id: "outsidePlexAdvisory", title: "Plex Online Age Guidance",
+                            kind: .toggle(get: { OutsideLookups.plexAdvisory },
+                                          set: { OutsideLookups.plexAdvisory = $0 })),
+            SettingsRowItem(id: "outsidePlexPeople", title: "Plex Online Actor Details",
+                            kind: .toggle(get: { OutsideLookups.plexPeople },
+                                          set: { OutsideLookups.plexPeople = $0 }))
         ]
     }
 

@@ -6592,6 +6592,7 @@
         }
       }
     },
+    "Developer's Online Extras" : {},
     "Diagnostics Sent" : {
       "localizations" : {
         "de" : {
@@ -14611,6 +14612,8 @@
         }
       }
     },
+    "Plex Online Actor Details" : {},
+    "Plex Online Age Guidance" : {},
     "Plex URL malformed" : {
       "localizations" : {
         "de" : {
@@ -15040,6 +15043,7 @@
         }
       }
     },
+    "Privacy" : {},
     "Producer Restarts" : {
       "localizations" : {
         "de" : {
@@ -18561,6 +18565,9 @@
       }
     },
     "Shows the MyAnimeList score beside the rating on an anime's pages. The scores are stored inside the app, so nothing is looked up online." : {},
+    "Extra ratings, title logos, Discover, trivia and scores from the app developer's servers, which see each title you open. A self-built copy cannot use them, so leave this off." : {},
+    "Asks Plex's online service for the full age guidance of each title you open, which tells Plex the title. Off shows only what your own server holds." : {},
+    "Asks Plex's online service for an actor's biography and Known For titles when you open their page. Off shows only what is on your own server." : {},
     "Shows the profile picker each time Rivulet opens, and when you come back after more than 30 seconds away: on the Home Screen, in another app or on the screensaver." : {
       "localizations" : {
         "de" : {

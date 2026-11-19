@@ -611,6 +611,20 @@ enum SettingsDescriptorStore {
             description: "Sends a snapshot of Rivulet's setup and recent logs, and gives you a code to quote in a report. No titles, servers, addresses or passwords."
         ),
 
+        // MARK: Privacy
+        "outsideDeveloper": SettingDescriptor(
+            icon: "server.rack",
+            description: "Extra ratings, title logos, Discover, trivia and scores from the app developer's servers, which see each title you open. A self-built copy cannot use them, so leave this off."
+        ),
+        "outsidePlexAdvisory": SettingDescriptor(
+            icon: "hand.raised",
+            description: "Asks Plex's online service for the full age guidance of each title you open, which tells Plex the title. Off shows only what your own server holds."
+        ),
+        "outsidePlexPeople": SettingDescriptor(
+            icon: "person.crop.circle",
+            description: "Asks Plex's online service for an actor's biography and Known For titles when you open their page. Off shows only what is on your own server."
+        ),
+
         // MARK: Content Filtering
         "cat_contentFilter": SettingDescriptor(
             icon: "hand.raised.fill",

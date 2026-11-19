@@ -46,6 +46,8 @@ private nonisolated struct DiscoverContainer: Codable, Sendable {
 
 /// Discover needs the account token, not the server token.
 private func discoverItems(_ path: String) async -> [DiscoverContainer.Item] {
+    // Off unless the owner turns it on: no Known For, and the biography comes from the server.
+    guard OutsideLookups.plexPeople else { return [] }
     guard let token = await MainActor.run(body: { PlexAuthManager.shared.authToken }),
           let url = URL(string: "https://discover.provider.plex.tv\(path)") else { return [] }
     let headers = await PlexNetworkManager.shared.plexHeaders(authToken: token)

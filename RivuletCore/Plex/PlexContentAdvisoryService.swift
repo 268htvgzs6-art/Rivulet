@@ -23,6 +23,8 @@ struct PlexContentAdvisoryService: Sendable {
     /// ratingKey, then fetch the full advisory. Returns nil if unmatched / no
     /// Plex Pass / no advisory.
     func advisory(forGuid guid: String, isMovie: Bool, accountToken: String) async -> ContentAdvisory? {
+        // Off unless the owner turns it on: the caller keeps the server's own partial advisory.
+        guard OutsideLookups.plexAdvisory else { return nil }
         guard let rk = await discoverRatingKey(guid: guid, isMovie: isMovie, token: accountToken) else { return nil }
         return await fullAdvisory(discoverRatingKey: rk, token: accountToken)
     }
