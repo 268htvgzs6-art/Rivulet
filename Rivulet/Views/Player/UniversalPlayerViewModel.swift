@@ -212,6 +212,14 @@ final class UniversalPlayerViewModel: ObservableObject, WatchTogetherPlayer {
     @Published private(set) var showSkipButton = false
     /// Menu hid the pill for this marker or this Up Next fold; it still shows in the controls (#556).
     @Published private(set) var skipPillDismissed = false
+    /// The floating pill's turn with focus is over (fork): it holds focus for
+    /// `skipPillFocusSeconds` each time it is left alone over the video, then the
+    /// content takes focus back, so a click no longer skips. The pill stays up.
+    @Published private(set) var skipPillFocusExpired = false
+    private var skipPillFocusTimer: Timer?
+    private let skipPillFocusSeconds: TimeInterval = 3
+    /// Bumped on every begin/end so a timer that fired just before cannot expire a newer window.
+    private var skipPillFocusGeneration = 0
     private var hasSkippedIntro = false
     private var skippedCreditsIds: Set<Int> = []  // Track skipped credits by ID (can have multiple)
     private var skippedCommercialIds: Set<Int> = []  // Track skipped commercials by ID
@@ -5508,6 +5516,32 @@ final class UniversalPlayerViewModel: ObservableObject, WatchTogetherPlayer {
         skipPillDismissed = true
     }
 
+    /// The pill was just left alone over the video: it holds focus for
+    /// `skipPillFocusSeconds`, then hands it back to the content (fork).
+    /// Called by `PlayerContainerViewController.applyChromeVisibility()`.
+    func beginSkipPillFocusWindow() {
+        skipPillFocusTimer?.invalidate()
+        skipPillFocusGeneration += 1
+        let generation = skipPillFocusGeneration
+        if skipPillFocusExpired { skipPillFocusExpired = false }
+        skipPillFocusTimer = Timer.scheduledTimer(withTimeInterval: skipPillFocusSeconds, repeats: false) { [weak self] _ in
+            Task { @MainActor [weak self] in
+                guard let self, generation == self.skipPillFocusGeneration else { return }
+                self.skipPillFocusExpired = true
+            }
+        }
+    }
+
+    /// The pill is no longer alone (controls or the seek bar up, loading, marker
+    /// over, dismissed): stop the clock. `skipPillFocusExpired` is left as it
+    /// is, so a window that ran out keeps focus on the content until the next
+    /// `beginSkipPillFocusWindow()` opens a fresh one.
+    func endSkipPillFocusWindow() {
+        skipPillFocusTimer?.invalidate()
+        skipPillFocusTimer = nil
+        skipPillFocusGeneration += 1
+    }
+
     func cancelSkipCountdown() {
         guard skipCountdownTimer != nil || skipCountdownSeconds > 0 else { return }
 
@@ -5680,17 +5714,23 @@ final class UniversalPlayerViewModel: ObservableObject, WatchTogetherPlayer {
     }
 
     /// True when the skip pill is the lone on-screen affordance — chrome
-    /// hidden, not scrubbing, no post-video, live video frame — and should
-    /// own focus so a single Select jumps forward. Mirrors
-    /// `controlsFocusActive`: while true the SwiftUI content layer releases
-    /// focus and `PlayerContainerViewController` routes it to the pill.
-    var skipPillOwnsFocus: Bool {
+    /// hidden, not scrubbing, no post-video, live video frame.
+    var skipPillFloatsAlone: Bool {
         showsSkipPill
             && !skipPillDismissed
             && !showControls
             && !isScrubbing
             && postVideoState == .hidden
             && pausePresentation == .frame
+    }
+
+    /// True while the lone pill should own focus so a single Select jumps
+    /// forward. Mirrors `controlsFocusActive`: while true the SwiftUI content
+    /// layer releases focus and `PlayerContainerViewController` routes it to
+    /// the pill. A marker's pill owns focus for its window only (fork, see
+    /// `skipPillFocusExpired`); the folded Up Next pill keeps it throughout.
+    var skipPillOwnsFocus: Bool {
+        skipPillFloatsAlone && (upNextCollapsed || !skipPillFocusExpired)
     }
 
     /// Puts the chosen version of a server-ordered `Media` array first and records it.
@@ -7227,6 +7267,7 @@ final class UniversalPlayerViewModel: ObservableObject, WatchTogetherPlayer {
         countdownTimer?.invalidate()
         seekIndicatorTimer?.invalidate()
         skipCountdownTimer?.invalidate()
+        skipPillFocusTimer?.invalidate()
         aetherStallWatchdogTask?.cancel()
         insightsRecheckTask?.cancel()
         if let observer = appBackgroundObserver {
