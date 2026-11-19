@@ -113,6 +113,9 @@ struct RivuletApp: App {
         // Lists the installed Arabic subtitle fonts and re-activates a downloaded one, off the main thread.
         SubtitleAppearance.prepareFontsAtLaunch()
 
+        // The bundled anime scores table, if this build carries one; read off the main thread.
+        AnimeScores.loadAtLaunch()
+
         // NowPlayingService disabled — AVPlayerViewController handles Now Playing natively.
         // NowPlayingService.shared.initialize()
 

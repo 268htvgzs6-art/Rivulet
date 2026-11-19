@@ -416,7 +416,7 @@ final class SeasonDetailViewController: UIViewController, UICollectionViewDelega
         if let rated = seasonDetail?.contentRating ?? showDetail?.contentRating, !rated.isEmpty {
             metaRow.addArrangedSubview(MediaDetailChromeView.makeBadge(rated, alpha: 0.75))
         }
-        MediaDetailChromeView.scoreAndAgeViews(ratings: scoreRatings, age: ageRating, alpha: 0.75)
+        MediaDetailChromeView.scoreAndAgeViews(ratings: scoreRatings, age: ageRating, anime: animeScore, alpha: 0.75)
             .forEach(metaRow.addArrangedSubview)
         metaRow.isHidden = metaRow.arrangedSubviews.isEmpty
         // After the emptiness rule: a hidden indicator must not keep an empty row up.
@@ -427,6 +427,11 @@ final class SeasonDetailViewController: UIViewController, UICollectionViewDelega
     private var scoreRatings: [MediaRating] {
         let own = seasonDetail?.ratings ?? []
         return own.isEmpty ? showDetail?.ratings ?? [] : own
+    }
+
+    /// The season's MyAnimeList score, by the SHOW's ids and this season's number.
+    private var animeScore: Double? {
+        AnimeScores.score(kind: .season, ids: showDetail?.externalIDs ?? [:], season: season.seasonNumber)
     }
 
     private func loadLogo() {

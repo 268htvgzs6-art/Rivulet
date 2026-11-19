@@ -188,6 +188,10 @@ enum SettingsDescriptorStore {
             icon: "speaker.wave.2",
             description: "How loud the theme tune plays, on top of your TV's own volume."
         ),
+        "animeScores": SettingDescriptor(
+            icon: "star.circle",
+            description: "Shows the MyAnimeList score beside the rating on an anime's pages. The scores are stored inside the app, so nothing is looked up online."
+        ),
         "libraryHero": SettingDescriptor(
             icon: "rectangle.stack",
             description: "Shows a banner of featured titles at the top of each library."

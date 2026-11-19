@@ -933,6 +933,7 @@ final class MediaDetailChromeView: UIView {
         // One score, from the source chosen in Appearance, and the Common Sense age; episodes show neither.
         if item.kind != .episode {
             Self.scoreAndAgeViews(ratings: detail?.ratings ?? [], age: detail?.contentAdvisory?.ageRating,
+                                  anime: Self.animeScore(item: item, detail: detail),
                                   alpha: Self.qualityRowAlpha).forEach(qualityRow.addArrangedSubview)
         }
 
@@ -945,7 +946,15 @@ final class MediaDetailChromeView: UIView {
     }
 
     /// The score (glyph or source name, then value) and the Common Sense age with its green seal.
-    static func scoreAndAgeViews(ratings: [MediaRating], age: String?, alpha: CGFloat) -> [UIView] {
+    /// A show's or film's MyAnimeList score. Nil for a season or episode: their own ids are not the show's.
+    private static func animeScore(item: MediaItem, detail: MediaItemDetail?) -> Double? {
+        guard item.kind == .show || item.kind == .movie else { return nil }
+        var ids = detail?.externalIDs ?? [:]
+        if ids.isEmpty { ids = item.externalIDs ?? [:] }
+        return AnimeScores.score(kind: item.kind, ids: ids, season: nil)
+    }
+
+    static func scoreAndAgeViews(ratings: [MediaRating], age: String?, anime: Double? = nil, alpha: CGFloat) -> [UIView] {
         var views: [UIView] = []
         if let rating = MediaRating.detailRating(in: ratings) {
             let label = makeCaptionLabel(rating.badgeText, alpha: alpha)
@@ -981,6 +990,7 @@ final class MediaDetailChromeView: UIView {
             ratingStack.alignment = .center
             views.append(ratingStack)
         }
+        if let anime { views.append(animeScoreView(anime, alpha: alpha)) }
         if let age {
             let seal = UIImageView(image: UIImage(systemName: "checkmark.circle"))
             seal.tintColor = .systemGreen
@@ -999,6 +1009,24 @@ final class MediaDetailChromeView: UIView {
         return views
     }
 
+    /// MyAnimeList's score beside the first one: a small "MAL" mark, then the score as MAL writes it.
+    static func animeScoreView(_ score: Double, alpha: CGFloat) -> UIView {
+        let badge = UIImageView(image: malBadge)
+        badge.translatesAutoresizingMaskIntoConstraints = false
+        NSLayoutConstraint.activate([
+            badge.widthAnchor.constraint(equalToConstant: malBadge.size.width),
+            badge.heightAnchor.constraint(equalToConstant: malBadge.size.height)
+        ])
+        let text = String(format: "%.2f", score)
+        let stack = UIStackView(arrangedSubviews: [badge, makeCaptionLabel(text, alpha: alpha)])
+        stack.axis = .horizontal
+        stack.alignment = .center
+        stack.spacing = 6
+        stack.isAccessibilityElement = true
+        stack.accessibilityLabel = String(localized: "MyAnimeList score \(text)")
+        return stack
+    }
+
     /// An emoji as the score's glyph (tomato when fresh at 60% and up, nauseated face when rotten,
     /// popcorn for the audience); the system's art, so no rating-site artwork ships in the app.
     private static func emojiGlyph(_ emoji: String) -> UIImage {
@@ -1013,22 +1041,30 @@ final class MediaDetailChromeView: UIView {
     /// IMDb's yellow badge, drawn in code: "IMDb" in black heavy condensed type on a #F5C518
     /// rounded rectangle. Its height is the caption font's cap height x 1.25, which lands on the
     /// row's 22pt badge height, with the word's caps centred on it.
-    private static let imdbBadge: UIImage = {
+    private static let imdbBadge = wordBadge(
+        "IMDb", fill: UIColor(red: 0xF5 / 255.0, green: 0xC5 / 255.0, blue: 0x18 / 255.0, alpha: 1), ink: .black)
+
+    /// "MAL" in white on MyAnimeList's blue (#2E51A2), drawn in code like the IMDb one.
+    private static let malBadge = wordBadge(
+        "MAL", fill: UIColor(red: 0x2E / 255.0, green: 0x51 / 255.0, blue: 0xA2 / 255.0, alpha: 1), ink: .white)
+
+    /// The shared drawing: a word in heavy condensed type on a rounded rectangle of `fill`.
+    private static func wordBadge(_ word: String, fill: UIColor, ink: UIColor) -> UIImage {
         let height = (captionFont.capHeight * 1.25).rounded()
         let textFont = UIFont.systemFont(ofSize: (height * 0.66).rounded(), weight: .black, width: .condensed)
-        let text = "IMDb" as NSString
-        let attributes: [NSAttributedString.Key: Any] = [.font: textFont, .foregroundColor: UIColor.black]
+        let text = word as NSString
+        let attributes: [NSAttributedString.Key: Any] = [.font: textFont, .foregroundColor: ink]
         let textWidth = text.size(withAttributes: attributes).width
         let size = CGSize(width: (textWidth + height * 0.5).rounded(.up), height: height)
         return UIGraphicsImageRenderer(size: size).image { _ in
-            UIColor(red: 0xF5 / 255.0, green: 0xC5 / 255.0, blue: 0x18 / 255.0, alpha: 1).setFill()
+            fill.setFill()
             UIBezierPath(roundedRect: CGRect(origin: .zero, size: size), cornerRadius: height * 0.18).fill()
             // The baseline that puts the top of the caps at (height - capHeight) / 2.
             let baseline = (height + textFont.capHeight) / 2
             text.draw(at: CGPoint(x: (size.width - textWidth) / 2, y: baseline - textFont.ascender),
                       withAttributes: attributes)
         }
-    }()
+    }
 
     // MARK: - Factories
 
