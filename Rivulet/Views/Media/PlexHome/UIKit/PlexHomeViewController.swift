@@ -573,6 +573,8 @@ final class PlexHomeViewController: UIViewController {
     private var dwellViewPending = false
     private var dwellWork: DispatchWorkItem?
     private var dwellArmedAt: CFTimeInterval = 0
+    /// The hold the current tile was armed with (Settings > Appearance > Poster Spotlight).
+    private var dwellDelay: TimeInterval = 0
     private var dwellOwnsWash = false
     private var dwellRevealed = false
     /// True while a revealed picture is fading out; the fade's completion hands the wash back.
@@ -4823,11 +4825,13 @@ final class PlexHomeViewController: UIViewController {
     private func beginDwell(url: URL?, view tile: UIView?) {
         cancelDwell()
         if case .search = mode { return }
-        guard let url else { return }
+        // Off in Settings: no hold is armed, so nothing below ever fires.
+        guard let url, let delay = HomeHoldSettings.holdDelay else { return }
         dwellURL = url
         dwellView = tile
         dwellArmedAt = CACurrentMediaTime()
-        scheduleDwell(after: HomeWash.holdDelay)
+        dwellDelay = delay
+        scheduleDwell(after: delay)
     }
 
     private func scheduleDwell(after delay: TimeInterval) {
@@ -4853,7 +4857,7 @@ final class PlexHomeViewController: UIViewController {
         dwellWork = nil
         guard let url = dwellURL, let tile = dwellView else { return }
         let wait = HomeWash.holdRemaining(now: CACurrentMediaTime(), armedAt: dwellArmedAt,
-                                          lastMotion: lastPageMotion)
+                                          lastMotion: lastPageMotion, holdDelay: dwellDelay)
         if wait > 0.01 {
             scheduleDwell(after: wait)
             return
@@ -8176,7 +8180,7 @@ extension PlexHomeViewController: UICollectionViewDelegate {
             if dwellRevealed {
                 concealDwell()
                 dwellArmedAt = lastPageMotion
-                scheduleDwell(after: HomeWash.holdDelay)
+                scheduleDwell(after: dwellDelay)
             }
         }
         applyWashAlpha()

@@ -523,6 +523,14 @@ enum SettingsContent {
                             kind: .cycle(value: { TopShelfCache.shared.fullScreen ? String(localized: "Full Screen") : String(localized: "Posters") },
                                          next: { TopShelfCache.shared.fullScreen.toggle() })),
             toggle("skipPreview", "Skip Preview", key: "skipPreviewCarousel", default: false),
+            SettingsRowItem(id: "posterSpotlight", title: "Poster Spotlight", kind: .cycle(
+                value: {
+                    let seconds = HomeHoldSettings.seconds
+                    return seconds == 0 ? String(localized: "Off") : String(localized: "\(seconds) s")
+                },
+                next: {
+                    HomeHoldSettings.seconds = HomeHoldSettings.next(after: HomeHoldSettings.seconds)
+                })),
 
             // Titles drop whatever their caption already says ("Home Hero" under
             // HOME reads as "Home Home Hero"), the way Apple TV Settings puts a

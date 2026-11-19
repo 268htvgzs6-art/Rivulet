@@ -191,8 +191,6 @@ final class AmbientBackdropView: UIView {
 /// When Home's wash (the full-screen picture behind the rows) shows, and the numbers to tune it.
 /// Pure, so it can be unit tested.
 enum HomeWash {
-    /// Seconds focus must rest on one tile before its wide picture fades in.
-    static let holdDelay: TimeInterval = 2.0
     /// Seconds the page must have been still before a picture may fade in.
     static let settleDelay: TimeInterval = 0.3
     /// Fade-in time of a held tile's picture, and fade-out time when focus moves on.
@@ -216,7 +214,9 @@ enum HomeWash {
 
     /// Seconds still to wait before a hold may reveal: the hold itself, counted from when focus
     /// landed, and a short still period after the page last moved. Zero or less means reveal now.
-    static func holdRemaining(now: TimeInterval, armedAt: TimeInterval, lastMotion: TimeInterval) -> TimeInterval {
+    /// `holdDelay` is the user's choice (HomeHoldSettings).
+    static func holdRemaining(now: TimeInterval, armedAt: TimeInterval, lastMotion: TimeInterval,
+                              holdDelay: TimeInterval) -> TimeInterval {
         max(holdDelay - (now - armedAt), settleDelay - (now - lastMotion))
     }
 }

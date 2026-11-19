@@ -168,6 +168,10 @@ enum SettingsDescriptorStore {
             icon: "rectangle.expand.vertical",
             description: "Selecting a movie or show opens its full details at once, skipping the preview card. Off keeps the preview, where you can browse the row, except in a library."
         ),
+        "posterSpotlight": SettingDescriptor(
+            icon: "photo",
+            description: "Rest on a poster and the rest of the page fades away to show that title's wide picture. Choose how long to wait, or turn it off."
+        ),
         "detailRating": SettingDescriptor(
             icon: "star.leadinghalf.filled",
             description: "Choose the one rating shown at the top of a movie or show's details. If a title doesn't have the rating you choose, Rotten Tomatoes is shown instead."

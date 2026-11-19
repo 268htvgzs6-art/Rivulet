@@ -14849,6 +14849,7 @@
         }
       }
     },
+    "Poster Spotlight" : {},
     "Posters" : {
       "localizations" : {
         "de" : {
@@ -16831,6 +16832,7 @@
         }
       }
     },
+    "Rest on a poster and the rest of the page fades away to show that title's wide picture. Choose how long to wait, or turn it off." : {},
     "Results sent to Rivulet's diagnostics." : {
       "localizations" : {
         "de" : {
