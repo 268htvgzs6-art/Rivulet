@@ -155,12 +155,18 @@ struct WhatsNewView: View {
     // MARK: - Changelog Data
 
     static let changelogs: [(version: String, features: [String])] = [
-        ("1.5 (132)", [
+        ("1.5 (133)", [
             "> This is a community fork of Rivulet, not an official Rivulet release. Changes since 1.4 (130) are below.",
             "New: a TV show's theme tune plays quietly on its page, and stops when you leave or start playing (Plex servers)",
             "Turn it off or set its volume in Settings > Appearance > Theme Music",
+            "A small music note marks shows that have a theme tune; a ring around it means the tune is loading",
+            "New: shows with several seasons can list their seasons as posters, like Plex: pick a season to see its episodes (Settings > Appearance > Seasons)",
+            "New: anime shows its MyAnimeList score beside IMDb, read from a file inside the app (in builds that include the scores file)",
+            "The IMDb mark is drawn as the old ticket stub",
+            "Privacy: lookups to outside services are off unless you turn them on in Settings > About > Privacy",
             "Home: the background goes dark once you move down from the featured title",
             "Rest on a poster for two seconds: the page fades away to its wide picture, with only that poster left",
+            "Poster Spotlight in Settings > Appearance turns the picture behind a held poster off, or sets how long to wait",
             "Fast Up and Down runs on Home no longer brake a little on every press",
             "Detail, season and person pages, the music queue and held-arrow scrolling move as evenly as Home",
             "Less work while moving between episodes and drawing episode cards and show badges",

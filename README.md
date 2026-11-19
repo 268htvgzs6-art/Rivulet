@@ -6,6 +6,12 @@ Changes in 1.5:
 
 - Theme music: a TV show's theme tune plays once, quietly, on its show, season and episode pages, with Theme Music and Theme Music Volume in Settings > Appearance (tvOS, Plex servers)
 - Home: the background is dark once focus leaves the hero, and resting on a tile for two seconds fades the rest of the page out for that title's backdrop
+- Poster Spotlight in Settings > Appearance turns that held-tile backdrop off, or sets its wait to 1, 2, 3 or 5 seconds (tvOS)
+- Theme music: a small note on a show's, season's and episode's page marks a show that has a tune, with a ring while the tune loads (tvOS, Plex servers)
+- Season posters: a show with two or more seasons lists them as posters that open the season page; Settings > Appearance > Seasons switches back to the episode row (tvOS)
+- Anime: a MyAnimeList score beside the rating on anime pages, read from a scores file bundled at build time. The file is not in the repository, so a build without it shows nothing (tvOS)
+- The IMDb mark is drawn as a ticket stub
+- Privacy: the developer's online extras, Plex's online age guidance and Plex's online actor details are off unless switched on in Settings > About > Privacy (switches on tvOS; off on iOS and Mac)
 - Fast Up and Down runs on Home no longer brake on every press
 - Detail, season and person pages, the music queue and held-arrow scrolling are timed to the displayed frame
 - Less work per episode card and show badge
