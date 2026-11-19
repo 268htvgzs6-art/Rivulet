@@ -945,7 +945,6 @@ final class MediaDetailChromeView: UIView {
         qualityRow.addArrangedSubview(themeIndicator)
     }
 
-    /// The score (glyph or source name, then value) and the Common Sense age with its green seal.
     /// A show's or film's MyAnimeList score. Nil for a season or episode: their own ids are not the show's.
     private static func animeScore(item: MediaItem, detail: MediaItemDetail?) -> Double? {
         guard item.kind == .show || item.kind == .movie else { return nil }
@@ -954,6 +953,8 @@ final class MediaDetailChromeView: UIView {
         return AnimeScores.score(kind: item.kind, ids: ids, season: nil)
     }
 
+    /// The score (glyph or source name, then value), the MyAnimeList score when there is one, and
+    /// the Common Sense age with its green seal.
     static func scoreAndAgeViews(ratings: [MediaRating], age: String?, anime: Double? = nil, alpha: CGFloat) -> [UIView] {
         var views: [UIView] = []
         if let rating = MediaRating.detailRating(in: ratings) {
