@@ -758,6 +758,9 @@ class PlayerContainerViewController: UIViewController {
         // own press handling) already acted on this press.
         guard let focusedView = focused as? UIView else { return false }
         if focusedView === contentAnchor { return true }
+        // The scrubber keeps focus after the bar hides; Up/Down there act as from the content (fork).
+        if focusedView === scrubberProxy, !vm.showControls, !vm.isScrubbing,
+           type == .upArrow || type == .downArrow { return true }
         if focusedView === skipPill {
             // Only Left/Right seek behind the floating pill. An Up here is usually the
             // press that just moved focus onto it, so claiming it bounces focus back.
@@ -840,10 +843,11 @@ class PlayerContainerViewController: UIViewController {
     }
 
     /// Up/Down: while scrubbing, Up snaps to the next chapter in the direction
-    /// of travel and Down cancels. Otherwise they surface the controls as AVKit
-    /// does: Up lands on the first tool button, Down opens the Info pane
-    /// (Insights over the pause screen, from its hint). With the controls
-    /// already up, Down lands on the first tab instead, as Down from the bar does.
+    /// of travel and Down cancels. Otherwise they surface the controls: Up lands
+    /// on the first tool button. Down takes two steps (fork): the first brings
+    /// the bar up on the scrubber, and the next Down opens the Info pane (from
+    /// the scrubber through `onPillRowEntered`, or here with the bar already up).
+    /// Over the pause screen Down opens Insights from its hint.
     private func handleContentVertical(up: Bool) {
         guard let vm = viewModel else { return }
         if !up, pauseScreen?.showsInsightsHint == true, !vm.isScrubbing {
@@ -873,10 +877,13 @@ class PlayerContainerViewController: UIViewController {
         if up {
             if let tool = rail?.firstToolButton { rail?.setFocusLanding(tool) }
             vm.enterControlsFocus()
-        } else {
+        } else if railWasUp {
             if let info = rail?.infoButton { rail?.setFocusLanding(info) }
             vm.enterControlsFocus()
-            if !railWasUp { presentPane(.info) }
+            presentPane(.info)
+        } else {
+            focusScrubber()
+            return
         }
         setNeedsFocusUpdate()
         updateFocusIfNeeded()
@@ -1727,6 +1734,12 @@ class PlayerContainerViewController: UIViewController {
         rail.onUpNext = { [weak self] in self?.presentPane(.upNext) }
         rail.onInsights = { [weak self] in self?.presentPane(.insights) }
         rail.onDetails = { [weak self] in self?.presentPane(.details) }
+        // Down from the bar into the tabs opens the pane (fork): the second Down of the two.
+        rail.onPillRowEntered = { [weak self] pill in
+            guard let self, self.activeRailPanel?.window == nil,
+                  let tab = self.paneTab(for: pill) else { return }
+            self.presentPane(tab)
+        }
         rail.onPillFocused = { [weak self] pill in
             guard let self, self.activeRailPanel?.isPane == true,
                   let tab = self.paneTab(for: pill), tab != self.openPaneTab else { return }

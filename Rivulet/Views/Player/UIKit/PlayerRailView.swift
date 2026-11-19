@@ -99,6 +99,8 @@ final class PlayerRailView: UIView {
     var onDetails: (() -> Void)?
     /// A pill gained focus. While a pane is open this switches its tab, as AVKit's do.
     var onPillFocused: ((PlayerInfoPillButton) -> Void)?
+    /// Focus moved down into the pill row from the bar above it (fork).
+    var onPillRowEntered: ((PlayerInfoPillButton) -> Void)?
     var onInsights: (() -> Void)?
     var onUpNext: (() -> Void)?
     var onFilter: (() -> Void)?
@@ -466,6 +468,10 @@ final class PlayerRailView: UIView {
         if let pill = context.nextFocusedView as? PlayerInfoPillButton {
             if pill.isDescendant(of: pillRow) {
                 onPillFocused?(pill)
+                if context.focusHeading.contains(.down),
+                   context.previouslyFocusedView?.isDescendant(of: pillRow) != true {
+                    onPillRowEntered?(pill)
+                }
             } else if let index = insightsTabRow.arrangedSubviews.firstIndex(of: pill) {
                 for case let (i, tab as PlayerInfoPillButton) in insightsTabRow.arrangedSubviews.enumerated() {
                     tab.isSelectedTab = i == index
