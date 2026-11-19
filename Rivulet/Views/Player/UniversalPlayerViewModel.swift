@@ -212,9 +212,10 @@ final class UniversalPlayerViewModel: ObservableObject, WatchTogetherPlayer {
     @Published private(set) var showSkipButton = false
     /// Menu hid the pill for this marker or this Up Next fold; it still shows in the controls (#556).
     @Published private(set) var skipPillDismissed = false
-    /// The floating pill's turn with focus is over (fork): it holds focus for
-    /// `skipPillFocusSeconds` each time it is left alone over the video, then the
-    /// content takes focus back, so a click no longer skips. The pill stays up.
+    /// The floating pill's turn is over (fork): it shows, holding focus, for
+    /// `skipPillFocusSeconds` each time it is left alone over the video, then
+    /// fades and the content takes focus back, so a click no longer skips. The
+    /// controls still offer it (see `skipPillWindowOver`).
     @Published private(set) var skipPillFocusExpired = false
     private var skipPillFocusTimer: Timer?
     private let skipPillFocusSeconds: TimeInterval = 3
@@ -5516,8 +5517,8 @@ final class UniversalPlayerViewModel: ObservableObject, WatchTogetherPlayer {
         skipPillDismissed = true
     }
 
-    /// The pill was just left alone over the video: it holds focus for
-    /// `skipPillFocusSeconds`, then hands it back to the content (fork).
+    /// The pill was just left alone over the video: it shows with focus for
+    /// `skipPillFocusSeconds`, then fades and hands focus to the content (fork).
     /// Called by `PlayerContainerViewController.applyChromeVisibility()`.
     func beginSkipPillFocusWindow() {
         skipPillFocusTimer?.invalidate()
@@ -5724,13 +5725,19 @@ final class UniversalPlayerViewModel: ObservableObject, WatchTogetherPlayer {
             && pausePresentation == .frame
     }
 
+    /// A marker's floating pill has had its few seconds (fork): it is faded out
+    /// and no longer owns focus until it is next left alone. Never true for the
+    /// folded Up Next pill, nor while an auto-skip countdown is still sweeping it.
+    var skipPillWindowOver: Bool {
+        skipPillFocusExpired && !upNextCollapsed && skipCountdownSeconds == 0
+    }
+
     /// True while the lone pill should own focus so a single Select jumps
     /// forward. Mirrors `controlsFocusActive`: while true the SwiftUI content
     /// layer releases focus and `PlayerContainerViewController` routes it to
-    /// the pill. A marker's pill owns focus for its window only (fork, see
-    /// `skipPillFocusExpired`); the folded Up Next pill keeps it throughout.
+    /// the pill.
     var skipPillOwnsFocus: Bool {
-        skipPillFloatsAlone && (upNextCollapsed || !skipPillFocusExpired)
+        skipPillFloatsAlone && !skipPillWindowOver
     }
 
     /// Puts the chosen version of a server-ordered `Media` array first and records it.

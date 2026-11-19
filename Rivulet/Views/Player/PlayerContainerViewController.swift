@@ -1518,7 +1518,7 @@ class PlayerContainerViewController: UIViewController {
             .sink { [weak self] _ in self?.refreshSkipPill() }
             .store(in: &cancellables)
 
-        // The pill's focus window ran out: hand focus back to the content (fork).
+        // The pill's few seconds ran out: fade it and hand focus back to the content (fork).
         vm.$skipPillFocusExpired
             .removeDuplicates()
             .receive(on: DispatchQueue.main)
@@ -2357,10 +2357,11 @@ class PlayerContainerViewController: UIViewController {
         scrubberProxy?.isFocusEnabled = !paneOpen
             && ((railVisible && !isLoading) || (proxyHasFocus && !isLoading && !ambient))
 
-        // The floating skip pill holds focus for a few seconds each time it is
-        // left alone over the video (the controls or the seek bar went away, or
-        // its marker began), then the content takes focus back (fork). Decided
-        // before the gates below, which read `skipPillOwnsFocus`.
+        // The floating skip pill shows, holding focus, for a few seconds each
+        // time it is left alone over the video (the controls or the seek bar
+        // went away, or its marker began), then fades and the content takes
+        // focus back (fork). Decided before the gates below, which read
+        // `skipPillOwnsFocus`.
         let pillAlone = vm.skipPillFloatsAlone && !isLoading && !vm.showsSkipBar
         let pillWindowBegan = pillAlone && !lastSkipPillAlone
         if pillAlone != lastSkipPillAlone {
@@ -2403,10 +2404,12 @@ class PlayerContainerViewController: UIViewController {
         }
 
         // The skip pill: over the video while the controls are hidden (unless Menu
-        // dismissed it), in the rail's tool row while they are up (#556).
+        // dismissed it, or its few seconds there are over), in the rail's tool
+        // row while they are up (#556).
         let skipAvailable = vm.showsSkipPill && !isLoading && !ambient && vm.postVideoState == .hidden
         let pillInRail = skipAvailable && railVisible && !paneOpen
-        let skipVisible = pillInRail || (skipAvailable && !chromeVisible && !vm.skipPillDismissed)
+        let skipVisible = pillInRail
+            || (skipAvailable && !chromeVisible && !vm.skipPillDismissed && !vm.skipPillWindowOver)
         let pillHomeChanged = pillInRail == (rail?.skipPillSlot.isHidden ?? !pillInRail)
 
         // Whether the pill owns focus. Re-resolved after the alpha write below.
