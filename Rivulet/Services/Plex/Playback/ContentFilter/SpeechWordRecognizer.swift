@@ -57,8 +57,13 @@ final class SpeechModelStore: ObservableObject {
     }
 
     /// A copy re-signed on a free Apple ID has no App Group, and `AssetPackManager` crashes without one.
-    nonisolated private static let hasAssetPacks =
-        FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: "group.com.bain.Rivulet") != nil
+    /// The group is read from Info.plist's `BAAppGroupID` (the one Background Assets uses), so a build
+    /// that renames the group needs no edit here.
+    nonisolated private static let hasAssetPacks: Bool = {
+        guard let group = Bundle.main.object(forInfoDictionaryKey: "BAAppGroupID") as? String,
+              !group.isEmpty else { return false }
+        return FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: group) != nil
+    }()
 
     /// The model folder inside the asset pack, when the pack is on the device.
     nonisolated private static var packDirectory: URL? {
