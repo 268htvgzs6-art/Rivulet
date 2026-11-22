@@ -1119,11 +1119,11 @@ class PlayerContainerViewController: UIViewController {
 
     /// True when a touch-surface swipe may drive the scrubber. Checked where the
     /// pan begins, when a touch locks horizontal, and on every scrub update after
-    /// that. Only focus on a transport button (or in Insights over the pause
-    /// screen) blocks it.
+    /// that. Only while paused, as AVKit does; focus on a transport button (or
+    /// Insights over the pause screen) also blocks it.
     private var panCanDriveScrub: Bool {
         guard let vm = viewModel else { return false }
-        return !vm.playbackState.isFailed
+        return vm.playbackState == .paused
             && vm.postVideoState == .hidden
             && descriptionOverlay == nil
             && !focusIsOnTransportButton
@@ -1210,7 +1210,7 @@ class PlayerContainerViewController: UIViewController {
     /// on, or one the clickpad went down during, is spent: it never enters or
     /// drives a scrub.
     @objc private func handlePanGesture(_ gesture: UIPanGestureRecognizer) {
-        // Swipe-to-scrub works whether playing or paused.
+        // Scrubs only while paused, as AVKit does: a swipe while playing is ignored.
 
         let translation = gesture.translation(in: view)
         let velocity = gesture.velocity(in: view)
@@ -1333,6 +1333,7 @@ class PlayerContainerViewController: UIViewController {
         if RemoteInputHandler.isRingJogging { return "ring jog" }
         if swipeTouchClicked { return "clickpad down" }
         if swipeTouchSpent { return "an Up or Down swipe took it" }
+        if viewModel?.playbackState != .paused { return "not paused" }
         if !panCanDriveScrub { return focusIsOnTransportButton ? "focus is on a control" : "player state" }
         return nil
     }
