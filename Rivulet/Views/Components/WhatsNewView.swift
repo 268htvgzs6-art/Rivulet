@@ -155,6 +155,15 @@ struct WhatsNewView: View {
     // MARK: - Changelog Data
 
     static let changelogs: [(version: String, features: [String])] = [
+        ("1.6.5 (137)", [
+            "> This is a community fork of Rivulet, not an official Rivulet release. Changes since 1.6 (136) are below.",
+            "Swipe to scrub works while the video is paused, as in Apple's player, and Select after a scrub jumps there and plays",
+            "Fixed a black screen on server conversions with Match Dynamic Range on",
+            "Libraries you hide from Home stay out of the Home hero",
+            "Surround music plays as multichannel on a receiver instead of stereo",
+            "Sideloaded copies on a free Apple ID no longer crash",
+            "Updated AetherEngine to 7.71.0",
+        ]),
         ("1.6 (136)", [
             "> This is a community fork of Rivulet, not an official Rivulet release. Changes since 1.5 (135) are below.",
             "Scrolling up and down now uses the Apple TV's own motion, on Home, libraries, Search and every detail page",

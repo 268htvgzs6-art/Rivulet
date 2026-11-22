@@ -1,6 +1,11 @@
-## About this fork (1.6)
+## About this fork (1.6.5)
 
 This is a community fork of [l984-451/Rivulet](https://github.com/l984-451/Rivulet), based on Rivulet 1.3.1 (129). It is not affiliated with or endorsed by Rivulet's author, and the upstream repository remains the official app. Each change is its own commit, so it can be offered upstream on its own.
+
+Changes in 1.6.5:
+
+- Player: a touch-surface swipe scrubs only while the video is paused, as in Apple's player, and Select after a scrub lands there and plays (from upstream; the clock toggle is unchanged) (tvOS)
+- From upstream 1.3.1 (132): AetherEngine 7.71.0, the display mode asked for before a server conversion loads (no black screen with Match Dynamic Range, #677), hidden libraries kept out of the Home hero on every server, multichannel surround music, and no asset-pack crash on a free Apple ID (#696)
 
 Changes in 1.6:
 
